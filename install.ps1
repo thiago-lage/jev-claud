@@ -103,13 +103,14 @@ Write-Step "Instalando jev-claude"
 & $venvPython -m pip install --quiet --disable-pip-version-check --upgrade pip
 & $venvPython -m pip install --quiet --disable-pip-version-check --upgrade $Spec
 if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar: $Spec" }
-$exe = Join-Path $venv "Scripts\jev-claude.exe"
-Write-Ok ("Instalado: " + (& $exe --version))
+Write-Ok ("Instalado: " + (& $venvPython -m jev_claude --version))
 
 # 3. Comando no PATH ---------------------------------------------------------------------
+# O atalho chama `python -m jev_claude` (e nao o jev-claude.exe): assim o `jev-claude update`
+# consegue substituir o proprio pacote, ja que o Windows trava executaveis em uso.
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 $shim = Join-Path $BinDir "jev-claude.cmd"
-Set-Content -Path $shim -Encoding ASCII -Value "@echo off`r`n`"$exe`" %*"
+Set-Content -Path $shim -Encoding ASCII -Value "@echo off`r`n`"$venvPython`" -m jev_claude %*"
 Write-Ok "Comando: $shim"
 if (-not $env:JEV_CLAUDE_NO_MODIFY_PATH) {
     if (Add-ToUserPath $BinDir) { Write-Ok "$BinDir adicionado ao PATH do usuario" }
@@ -122,7 +123,7 @@ if ($env:JEV_CLAUDE_SKIP_SETUP) {
     Write-Host "  Pronto. Rode: jev-claude setup" -ForegroundColor Green
 } else {
     Write-Host ""
-    & $exe setup
+    & $venvPython -m jev_claude setup
     Write-Host ""
     Write-Host "  Abra um terminal novo para usar o comando jev-claude em qualquer pasta." -ForegroundColor DarkGray
 }

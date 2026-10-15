@@ -3,6 +3,14 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.1] - 2026-10-15
+
+### Corrigido
+
+- Windows: `jev-claude update` podia deixar a instalação quebrada ao tentar substituir o
+  `jev-claude.exe` em execução. O atalho do instalador agora chama `python -m jev_claude`, e o
+  `update` recusa a autoatualização quando roda pelo `.exe`, explicando o comando certo.
+
 ## [0.3.0] - 2026-10-15
 
 ### Adicionado

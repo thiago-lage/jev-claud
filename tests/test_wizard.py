@@ -352,6 +352,17 @@ def test_cli_update_upgrades_itself_when_not_editable(
     assert "typesafe-sdk" in out and PACKAGE_SPEC in out
 
 
+def test_cli_update_refuses_to_replace_running_windows_exe(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("jev_claude.cli._installed_editable", lambda: False)
+    monkeypatch.setattr("jev_claude.cli._running_windows_launcher", lambda: True)
+    assert main(["update", "--dry-run"]) == 1
+    captured = capsys.readouterr()
+    assert "-m jev_claude update" in captured.err
+    assert "pip install" not in captured.out  # nada foi tocado
+
+
 def test_config_used_by_jevclaude(tmp_path: Path) -> None:
     from jev_claude import JevClaude
 

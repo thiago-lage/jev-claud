@@ -8,6 +8,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, distribution
+from pathlib import Path
 from typing import Any
 
 from jev_claude import __version__
@@ -202,9 +203,23 @@ def _installed_editable() -> bool:
     return bool(info.get("dir_info", {}).get("editable"))
 
 
+def _running_windows_launcher() -> bool:
+    """`jev-claude.exe` em execução: o Windows trava o arquivo e o pip não consegue substituí-lo."""
+    return sys.platform == "win32" and Path(sys.argv[0]).stem.lower() == "jev-claude"
+
+
 def _update(r: JevClaude, args: argparse.Namespace) -> int:
     commands = [[sys.executable, "-m", "pip", "install", "--upgrade", "typesafe-sdk"]]
-    if not _installed_editable():
+    self_upgrade = not _installed_editable()
+    if self_upgrade and _running_windows_launcher():
+        print(
+            "No Windows o jev-claude.exe não consegue se substituir enquanto roda. Atualize com:\n"
+            f'  "{sys.executable}" -m jev_claude update\n'
+            "(o comando `jev-claude` criado pelo instalador já usa essa forma)",
+            file=sys.stderr,
+        )
+        return 1
+    if self_upgrade:
         commands.append([sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_SPEC])
     for command in commands:
         print("$ " + " ".join(command))
