@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Documentação
+
+- Páginas próprias para a ficha do plugin no diretório da Anthropic:
+  - `plugin/README.md` virou o guia completo do Jevin (`documentationUrl`);
+  - `SUPPORT.md`, com problemas comuns e formulários de issue (`supportUrl`);
+  - `PRIVACY.md`, a política de privacidade (`privacyPolicyUrl`).
+
 ## [0.8.1] - 2026-10-15
 
 ### Alterado

@@ -1,0 +1,14 @@
+name: Dúvida ou sugestão
+description: Como fazer algo com o Jevin ou o jev-claud, ou uma ideia de melhoria.
+body:
+  - type: textarea
+    id: pergunta
+    attributes:
+      label: Sua dúvida ou sugestão
+    validations:
+      required: true
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto
+      description: O que você está tentando fazer e o que já tentou.

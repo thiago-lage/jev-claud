@@ -3,8 +3,9 @@
 O Jevin é o mascote do [jev-claud](https://github.com/thiago-lage/jev-claud): um robozinho em
 pixel art com a antena em forquilha, a bifurcação que o código toma em cada decisão.
 
-Ensina o Claude Code a poupar contexto e custo sem mudar a qualidade da entrega: o Claude
-continua implementando direto (edita arquivos, roda testes).
+Este plugin ensina o Claude Code a poupar contexto e custo **sem mudar a qualidade da
+entrega**: o Claude continua implementando direto (edita arquivos, roda testes), só que gasta
+menos tokens explorando e escolhe a ferramenta certa quando o código usa IA.
 
 ## O que vem no plugin
 
@@ -12,6 +13,8 @@ continua implementando direto (edita arquivos, roda testes).
 | --- | --- | --- |
 | Skill `jev` | Ensina quando usar decisões tipadas (TypeSafe Jev), texto de LLM ou código puro, quando vale processar um arquivo grande fora do contexto e como ler saídas compactadas. Só entra no contexto quando é relevante. | Claude Code, Cowork, chat |
 | Subagente `scout` | Explora o código em contexto separado, somente leitura, e devolve só a conclusão com `caminho:linha`. | Claude Code, Cowork |
+
+O plugin é só texto: não roda programas, não grava arquivos e não acessa a rede.
 
 ## Instalar
 
@@ -28,6 +31,34 @@ Em versões anteriores:
 /plugin install jevin@jev-claud
 ```
 
+Abra uma sessão nova do Claude Code depois de instalar.
+
+## Como usar
+
+Não precisa chamar nada: o Claude usa a skill e o subagente quando o pedido combina com eles.
+
+**Skill `jev`.** Entra quando o código que você pede usa IA, ou quando há arquivos de dados
+grandes para classificar, ranquear ou resumir. Exemplos de pedidos:
+
+- "Classifique os tickets de suporte por setor antes de abrir o chamado": o Claude usa uma
+  decisão tipada (`choice`) do Jev em vez de pedir JSON a uma LLM e fazer parse.
+- "Escreva a resposta ao cliente com base no ticket": texto livre de LLM, porque uma pessoa vai
+  ler.
+- "Quantos dos 2.000 tickets de `tickets.csv` são cobrança?": com as ferramentas MCP do
+  jev-claud, o Claude envia só o caminho do arquivo e recebe as contagens.
+
+**Subagente `scout`.** Entra em perguntas amplas sobre o código, que exigiriam ler muitos
+arquivos. Também dá para pedir direto:
+
+```text
+Use o scout para descobrir onde a autenticação é validada e quem chama essa função.
+```
+
+O scout procura com `Grep` e `Glob`, lê só os trechos relevantes e devolve até ~40 linhas: a
+resposta direta, a lista de `caminho:linha` e os pontos de atenção. Ele usa as ferramentas do
+próprio Claude Code (com as mesmas permissões) e é instruído a não editar, instalar nem acessar
+a rede. Roda num modelo menor, então a exploração custa menos que no contexto principal.
+
 ## Com o pacote jev-claud (opcional)
 
 O pacote Python [`jev-claud`](https://pypi.org/project/jev-claud/) completa o plugin:
@@ -37,24 +68,45 @@ pip install jev-claud
 jev-claud setup
 ```
 
-O `setup` registra as ferramentas MCP do jev-claud e um hook que compacta as saídas longas de
-testes e builds antes que entrem no contexto. Num teste real (`pytest -v` em um projeto com 204
-testes), 214 linhas de saída viraram 65, com o resumo final intacto. Sem o pacote, a skill e o
-subagente funcionam normalmente.
+O `setup` pergunta antes de cada passo e pode:
 
-## O que o plugin roda, grava e envia
+- **Compactar as saídas de testes e builds:** grava um hook no `~/.claude/settings.json`. Em
+  saídas acima de ~80 linhas, o Claude recebe o começo, o fim e as linhas de erro. Num teste
+  real (`pytest -v` com 204 testes), 214 linhas viraram 65, com o resumo final intacto. Para
+  desligar, defina `JEV_CLAUD_COMPACT=0`.
+- **Registrar as ferramentas MCP** `classify`, `rank`, `summarize_file`, `decide` e `write`.
+  Elas processam arquivos grandes fora do contexto do Claude.
+- **Instalar o Ollama**, para texto grátis no seu computador.
 
-- **Roda:** nada. O plugin tem só texto: a skill e o subagente, em Markdown.
-- **Grava:** nada.
-- **Envia:** nada. O plugin não acessa a rede e não coleta telemetria.
+Sem o pacote, a skill e o subagente funcionam normalmente.
 
-O que o pacote `jev-claud` roda e grava, se você instalá-lo, está descrito em
-<https://github.com/thiago-lage/jev-claud#o-que-o-jev-claud-roda-e-envia>.
+## Privacidade
+
+O plugin não coleta nem envia nada. O que o pacote jev-claud guarda no seu computador, e quando
+algo sai dele, está na
+[política de privacidade](https://github.com/thiago-lage/jev-claud/blob/main/PRIVACY.md).
+
+## Problemas e suporte
+
+- **O Claude não usa o scout ou a skill:** confira se o plugin aparece em `/plugin` e abra uma
+  sessão nova. Pedidos explícitos ("use o scout para...") sempre funcionam.
+- **O plugin aparece com o nome antigo (`jev` ou `jev-claude`):** rode `jev-claud setup`, ou
+  desinstale o antigo e instale `jevin@jev-claud`.
+- **Outros problemas:** veja o
+  [guia de suporte](https://github.com/thiago-lage/jev-claud/blob/main/SUPPORT.md) ou
+  [abra uma issue](https://github.com/thiago-lage/jev-claud/issues/new/choose).
+
+## Desinstalar
+
+```text
+/plugin uninstall jevin@jev-claud
+```
+
+Ou, no terminal: `claude plugin uninstall jevin@jev-claud`.
 
 ## Mais informações
 
-Documentação completa, biblioteca Python e código-fonte:
-<https://github.com/thiago-lage/jev-claud>. Problemas e sugestões:
-<https://github.com/thiago-lage/jev-claud/issues>.
+- Projeto, biblioteca Python e código-fonte: <https://github.com/thiago-lage/jev-claud>
+- Mudanças por versão: [CHANGELOG](https://github.com/thiago-lage/jev-claud/blob/main/CHANGELOG.md)
 
 Licença MIT.

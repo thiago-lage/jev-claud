@@ -191,10 +191,13 @@ Transparência total sobre o que acontece na sua máquina:
 - **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
   passa pelas mesmas perguntas de permissão) e não coleta telemetria.
 
+Detalhes completos, inclusive como apagar tudo: [política de privacidade](PRIVACY.md).
+
 ## Plugin do Claude Code: Jevin
 
 O plugin ensina o Claude a poupar contexto **sem mudar a qualidade da entrega**: o Claude
-continua implementando direto (edita arquivos, roda testes).
+continua implementando direto (edita arquivos, roda testes). Guia completo:
+[plugin/README.md](plugin/README.md).
 
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
@@ -393,6 +396,11 @@ ruff check . && mypy
 
 Os testes não fazem chamadas de rede nem gastam nada: o Jev é simulado com os tipos reais
 do `typesafe-sdk`, e a LLM de texto com um servidor HTTP local.
+
+## Suporte
+
+Problemas comuns e como pedir ajuda: [SUPPORT.md](SUPPORT.md). Vulnerabilidades:
+[SECURITY.md](SECURITY.md). Privacidade: [PRIVACY.md](PRIVACY.md).
 
 ## Licença
 

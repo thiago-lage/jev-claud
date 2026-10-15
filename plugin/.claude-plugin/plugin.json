@@ -19,7 +19,7 @@
     "subagent"
   ],
   "icon": "./icon.png",
-  "documentationUrl": "https://github.com/thiago-lage/jev-claud#plugin-do-claude-code-jevin",
-  "supportUrl": "https://github.com/thiago-lage/jev-claud/issues",
-  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud#o-que-o-jev-claud-roda-e-envia"
+  "documentationUrl": "https://github.com/thiago-lage/jev-claud/blob/main/plugin/README.md",
+  "supportUrl": "https://github.com/thiago-lage/jev-claud/blob/main/SUPPORT.md",
+  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud/blob/main/PRIVACY.md"
 }
