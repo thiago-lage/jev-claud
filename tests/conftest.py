@@ -10,15 +10,15 @@ from typing import Any
 import pytest
 from typesafe_sdk import ChoiceAnswer, NoulAnswer, ScoreAnswer
 
-from jev_claude import Budget, JevBackend, JevClaude
+from jev_claud import Budget, JevBackend, JevClaud
 
 
 @pytest.fixture(autouse=True)
 def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     for name in list(os.environ):
-        if name.startswith(("JEV_CLAUDE_", "TYPESAFE_")):
+        if name.startswith(("JEV_CLAUD_", "JEV_CLAUDE_", "TYPESAFE_")):
             monkeypatch.delenv(name)
-    monkeypatch.setenv("JEV_CLAUDE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("JEV_CLAUD_HOME", str(tmp_path / "home"))
     # Porta "discard": recusa a conexão na hora, então nunca detectamos um Ollama real.
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
 
@@ -81,15 +81,15 @@ def score_answer(probabilities: list[float], legend: list[str], confidence: floa
 
 
 @pytest.fixture
-def make_jev() -> Callable[..., JevClaude]:
-    created: list[JevClaude] = []
+def make_jev() -> Callable[..., JevClaud]:
+    created: list[JevClaud] = []
 
-    def factory(client: FakeClient | None = None, *, budget: float = 1.0, **kwargs: Any) -> JevClaude:
+    def factory(client: FakeClient | None = None, *, budget: float = 1.0, **kwargs: Any) -> JevClaud:
         kwargs.setdefault("store", ":memory:")
         kwargs.setdefault("writer", None)
         kwargs.setdefault("strategy", "jev")  # testes da cascata pedem strategy="cascade"
         jev = JevBackend(client=client) if client is not None else None
-        r = JevClaude(jev=jev, budget=Budget(budget), **kwargs)
+        r = JevClaud(jev=jev, budget=Budget(budget), **kwargs)
         created.append(r)
         return r
 

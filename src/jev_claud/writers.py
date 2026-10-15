@@ -17,7 +17,8 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-from jev_claude.errors import WriterError
+from jev_claud.envvars import getenv
+from jev_claud.errors import WriterError
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
@@ -77,7 +78,7 @@ class OllamaWriter(OpenAICompatibleWriter):
         self.host = ollama_host(host)
         super().__init__(
             f"{self.host}/v1",
-            model or os.environ.get("JEV_CLAUDE_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
+            model or getenv("JEV_CLAUD_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
             timeout=timeout,
         )
 
@@ -123,18 +124,16 @@ class CallableWriter:
 def auto_writer(ollama_model: str | None = None) -> Writer | None:
     """Detecta uma LLM de texto sem custo extra de configuração.
 
-    1. `JEV_CLAUDE_LLM_BASE_URL` + `JEV_CLAUDE_LLM_MODEL` (+ `JEV_CLAUDE_LLM_API_KEY` opcional)
-    2. Ollama rodando localmente (modelo: `ollama_model`, `JEV_CLAUDE_OLLAMA_MODEL` ou `llama3.2`)
+    1. `JEV_CLAUD_LLM_BASE_URL` + `JEV_CLAUD_LLM_MODEL` (+ `JEV_CLAUD_LLM_API_KEY` opcional)
+    2. Ollama rodando localmente (modelo: `ollama_model`, `JEV_CLAUD_OLLAMA_MODEL` ou `llama3.2`)
     3. nenhuma (o `write()` explica como configurar)
     """
-    base_url = os.environ.get("JEV_CLAUDE_LLM_BASE_URL", "").strip()
+    base_url = getenv("JEV_CLAUD_LLM_BASE_URL").strip()
     if base_url:
-        model = os.environ.get("JEV_CLAUDE_LLM_MODEL", "").strip()
+        model = getenv("JEV_CLAUD_LLM_MODEL").strip()
         if not model:
-            raise WriterError("Defina JEV_CLAUDE_LLM_MODEL junto com JEV_CLAUDE_LLM_BASE_URL.")
-        return OpenAICompatibleWriter(
-            base_url, model, api_key=os.environ.get("JEV_CLAUDE_LLM_API_KEY") or None
-        )
+            raise WriterError("Defina JEV_CLAUD_LLM_MODEL junto com JEV_CLAUD_LLM_BASE_URL.")
+        return OpenAICompatibleWriter(base_url, model, api_key=getenv("JEV_CLAUD_LLM_API_KEY") or None)
     if OllamaWriter.available():
         return OllamaWriter(ollama_model)
     return None

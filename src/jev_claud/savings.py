@@ -1,4 +1,4 @@
-"""Quanto o jev-claude economizou: tokens do Claude (contexto) e do Jev (cascata e cache).
+"""Quanto o jev-claud economizou: tokens do Claude (contexto) e do Jev (cascata e cache).
 
 São estimativas, e o texto diz isso ("~"): tokens do Claude ≈ caracteres / 4, a média
 para texto e código. Nada aqui pode quebrar quem chama: falhas de disco são ignoradas.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 import sqlite3
 
-from jev_claude.store import Store
+from jev_claud.store import Store
 
 CHARS_PER_TOKEN = 4
 

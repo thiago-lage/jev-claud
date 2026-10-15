@@ -3,6 +3,30 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] - 2026-10-15
+
+### Alterado
+
+- **O projeto passa a se chamar `jev-claud`**: pacote (`pip install jev-claud`), comando
+  `jev-claud`, módulo `jev_claud`, classe `JevClaud`, variáveis `JEV_CLAUD_*`, repositório
+  `thiago-lage/jev-claud` e marketplace `jev-claud`.
+- **O plugin passa a se chamar Jevin** (`jevin@jev-claud`), como o mascote.
+- **Jevin, o mascote**, tem agora as proporções do bonequinho do Claude Code (olhos, bracinhos e
+  quatro perninhas, em blocos de quadrante), com a antena em forquilha. Ícone e imagens novos.
+- O hook do plugin aponta direto para `hooks/pre-bash.sh`, como pede o diretório da Anthropic.
+
+### Compatibilidade (nada do que já estava instalado quebra)
+
+- `jev-claude`, `python -m jev_claude`, `from jev_claude import JevClaude` e `JevClaudeError`
+  continuam funcionando como atalhos para o nome novo.
+- Variáveis `JEV_CLAUDE_*` valem quando a `JEV_CLAUD_*` correspondente não está definida.
+- A pasta de dados `jev-claude` (chave do Jev, cache, gastos) e o banco `jev_claude.sqlite3` são
+  renomeados sozinhos na primeira execução.
+- `jev-claud setup` troca o MCP `jev-claude`, o marketplace `jev-claude` e os plugins
+  `jev-claude`/`jev` pelos novos, e atualiza a regra global com os marcadores antigos.
+- Quem tem a 0.6: o `jev-claude update` antigo não consegue trocar de pacote; rode o instalador de
+  novo (ele cria os comandos `jev-claud` e `jev-claude`) e depois `jev-claud setup`.
+
 ## [0.6.2] - 2026-10-15
 
 ### Alterado

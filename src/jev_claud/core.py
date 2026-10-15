@@ -1,4 +1,4 @@
-"""`JevClaude`: um ponto de entrada para as duas saídas de IA de um app.
+"""`JevClaud`: um ponto de entrada para as duas saídas de IA de um app.
 
 - O **código vai ramificar** com a resposta? `decide`, `when`, `switch`, `rank` -> Jev
   (decisões tipadas; offline e grátis quando não há orçamento).
@@ -21,13 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from jev_claude import media
-from jev_claude.backends.base import RawAnswer, RawResult
-from jev_claude.backends.jev import JevBackend
-from jev_claude.backends.offline import OfflineBackend
-from jev_claude.budget import Budget
-from jev_claude.config import DAY, STRATEGIES, Settings
-from jev_claude.decision import (
+from jev_claud import media
+from jev_claud.backends.base import RawAnswer, RawResult
+from jev_claud.backends.jev import JevBackend
+from jev_claud.backends.offline import OfflineBackend
+from jev_claud.budget import Budget
+from jev_claud.config import DAY, STRATEGIES, Settings
+from jev_claud.decision import (
     Band,
     Decision,
     Decisions,
@@ -38,13 +38,13 @@ from jev_claude.decision import (
     noul_confidence,
     score_confidence,
 )
-from jev_claude.errors import BackendError, BudgetExceeded, NoWriterError
-from jev_claude.models import ALIASES, resolve_model
-from jev_claude.questions import Choice, Content, Noul, Question, Score, noul, to_wire
-from jev_claude.store import Store
-from jev_claude.writers import Writer, auto_writer
+from jev_claud.errors import BackendError, BudgetExceeded, NoWriterError
+from jev_claud.models import ALIASES, resolve_model
+from jev_claud.questions import Choice, Content, Noul, Question, Score, noul, to_wire
+from jev_claud.store import Store
+from jev_claud.writers import Writer, auto_writer
 
-logger = logging.getLogger("jev_claude")
+logger = logging.getLogger("jev_claud")
 
 Strategy = Literal["cascade", "jev"]
 
@@ -84,23 +84,23 @@ class Ranked:
     decision: Decision
 
 
-class JevClaude:
+class JevClaud:
     """Roteador de saídas de IA.
 
     Args:
         jev: `JevBackend`, `None` (nunca usar Jev) ou `"auto"` (usa se houver
             `TYPESAFE_API_KEY` e `typesafe-sdk` instalado).
         writer: LLM de texto, `None` ou `"auto"` (detectada no primeiro `write`).
-        model: `latest` | `preview` | `newest` | `jev-X.Y.Z` (padrão: `JEV_CLAUDE_MODEL` ou `latest`).
+        model: `latest` | `preview` | `newest` | `jev-X.Y.Z` (padrão: `JEV_CLAUD_MODEL` ou `latest`).
         policy: limiares de confiança padrão.
-        budget: teto mensal para o Jev (padrão: `JEV_CLAUDE_BUDGET_USD`, 0 = custo zero).
+        budget: teto mensal para o Jev (padrão: `JEV_CLAUD_BUDGET_USD`, 0 = custo zero).
         store: `Store`, caminho do SQLite ou `":memory:"`.
         fallback: `"offline"` responde com o backend offline quando o Jev não pode ser usado
             (sem orçamento, fora do ar); `"raise"` levanta a exceção.
         strategy: `"cascade"` (padrão: offline primeiro, Jev só nas perguntas incertas) ou
-            `"jev"` (toda pergunta vai ao Jev). Padrão: `JEV_CLAUDE_STRATEGY`.
+            `"jev"` (toda pergunta vai ao Jev). Padrão: `JEV_CLAUD_STRATEGY`.
         cascade_accept: confiança mínima para aceitar a resposta offline na cascata
-            (padrão: `JEV_CLAUDE_CASCADE_ACCEPT`, 0,8). Suba para escalar mais ao Jev.
+            (padrão: `JEV_CLAUD_CASCADE_ACCEPT`, 0,8). Suba para escalar mais ao Jev.
     """
 
     def __init__(
@@ -131,7 +131,7 @@ class JevClaude:
             has_key = JevBackend.key_configured(key)
             jev = JevBackend(api_key=key) if has_key and JevBackend.sdk_available() else None
             if jev is None and has_key:
-                logger.warning("Chave do Jev configurada, mas o SDK falta: pip install 'jev-claude[jev]'.")
+                logger.warning("Chave do Jev configurada, mas o SDK falta: pip install 'jev-claud[jev]'.")
         self.jev: JevBackend | None = jev
         self._writer: Writer | Literal["auto"] | None = writer
         self.model_spec = model or self.settings.model
@@ -357,7 +357,7 @@ class JevClaude:
         if writer is None:
             raise NoWriterError(
                 "Nenhuma LLM de texto configurada. Opções gratuitas: rode o Ollama localmente "
-                "(https://ollama.com) ou defina JEV_CLAUDE_LLM_BASE_URL e JEV_CLAUDE_LLM_MODEL para um "
+                "(https://ollama.com) ou defina JEV_CLAUD_LLM_BASE_URL e JEV_CLAUD_LLM_MODEL para um "
                 "endpoint compatível com OpenAI."
             )
         if context is not None:
@@ -388,7 +388,7 @@ class JevClaude:
         return resolve_model(model or self.model_spec, backend=self.jev, store=self.store)
 
     def status(self) -> dict[str, Any]:
-        """Retrato da configuração atual (usado por `jev-claude doctor`)."""
+        """Retrato da configuração atual (usado por `jev-claud doctor`)."""
         spent_usd, spent_tokens, calls = self.store.spent()
         writer = self._writer if self._writer != "auto" else None
         return {
@@ -424,7 +424,7 @@ class JevClaude:
             self.jev.close()
         self.store.close()
 
-    def __enter__(self) -> JevClaude:
+    def __enter__(self) -> JevClaud:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -458,7 +458,7 @@ class JevClaude:
         if boxes:
             raise BackendError(
                 f"{', '.join(boxes)}: Box exige o Jev (modelo de visão). Configure a chave e o "
-                "orçamento com `jev-claude setup`."
+                "orçamento com `jev-claud setup`."
             )
         if media.has_images(state, to_wire(questions)):
             self._warn_once("images", "Imagens exigem o Jev: a resposta offline ignora o conteúdo da imagem.")

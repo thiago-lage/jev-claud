@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
-from jev_claude.errors import QuestionError
+from jev_claud.errors import QuestionError
 
 Content: TypeAlias = "str | Mapping[str, Any] | Sequence[Any]"
 

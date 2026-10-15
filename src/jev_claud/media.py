@@ -19,7 +19,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
-from jev_claude.errors import QuestionError
+from jev_claud.errors import QuestionError
 
 REFERENCE = re.compile(r"<image:[0-9a-f]{32}>")
 # Tokens de entrada cobrados por imagem não são publicados; a estimativa é conservadora.

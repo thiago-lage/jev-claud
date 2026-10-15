@@ -13,7 +13,7 @@ name: Release
 #
 # PyPI por "trusted publishing", sem token guardado no repositório. Configuração única em
 # https://pypi.org/manage/account/publishing/ (pending publisher):
-#   projeto: jev-claude · dono: thiago-lage · repositório: jev-claude
+#   projeto: jev-claud · dono: thiago-lage · repositório: jev-claud
 #   workflow: release.yml · ambiente: pypi
 
 on:
@@ -91,8 +91,8 @@ jobs:
         run: |
           python -m venv /tmp/wheel-test
           /tmp/wheel-test/bin/pip install dist/*.whl
-          /tmp/wheel-test/bin/jev-claude --version
-          /tmp/wheel-test/bin/python -c "from jev_claude import JevClaude, Image, box; print('ok')"
+          /tmp/wheel-test/bin/jev-claud --version
+          /tmp/wheel-test/bin/python -c "from jev_claud import JevClaud, Image, box; print('ok')"
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -155,7 +155,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/jev-claude/
+      url: https://pypi.org/project/jev-claud/
     permissions:
       id-token: write
     steps:

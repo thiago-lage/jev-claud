@@ -1,19 +1,20 @@
 {
-  "name": "jev-claude",
-  "description": "Marketplace do jev-claude: um plugin que poupa contexto e custo no Claude Code.",
+  "name": "jev-claud",
+  "description": "Marketplace do jev-claud: o plugin Jevin, que poupa contexto e custo no Claude Code.",
   "owner": {
     "name": "Thiago Lage",
     "url": "https://github.com/thiago-lage"
   },
   "plugins": [
     {
-      "name": "jev",
+      "name": "jevin",
       "source": "./plugin",
       "description": "Saídas de teste compactadas, skill de decisões tipadas vs. texto, subagente explorador.",
       "category": "productivity"
     }
   ],
   "renames": {
-    "jev-claude": "jev"
+    "jev-claude": "jev",
+    "jev": "jevin"
   }
 }

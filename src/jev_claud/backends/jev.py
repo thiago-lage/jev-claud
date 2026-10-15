@@ -7,10 +7,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from jev_claude import media
-from jev_claude.backends.base import RawAnswer, RawResult
-from jev_claude.errors import BackendError, QuestionError
-from jev_claude.questions import Question, to_wire
+from jev_claud import media
+from jev_claud.backends.base import RawAnswer, RawResult
+from jev_claud.errors import BackendError, QuestionError
+from jev_claud.questions import Question, to_wire
 
 DEFAULT_MODEL = "jev-latest"
 
@@ -72,7 +72,7 @@ class JevBackend:
             try:
                 from typesafe_sdk import TypeSafeClient
             except ImportError as error:
-                raise BackendError("Instale o SDK do Jev: pip install 'jev-claude[jev]'") from error
+                raise BackendError("Instale o SDK do Jev: pip install 'jev-claud[jev]'") from error
             kwargs: dict[str, Any] = {}
             if self._api_key:
                 kwargs["api_key"] = self._api_key
@@ -115,7 +115,7 @@ class JevBackend:
         try:
             from typesafe_sdk import Image as SdkImage
         except ImportError as error:
-            raise BackendError("Imagens exigem o SDK do Jev: pip install 'jev-claude[jev]'") from error
+            raise BackendError("Imagens exigem o SDK do Jev: pip install 'jev-claud[jev]'") from error
         return {ref: SdkImage(image.data) for ref, image in images.items()}
 
     def list_models(self) -> list[ModelInfo]:
@@ -160,4 +160,4 @@ def _convert(answer: Any) -> RawAnswer:
             value={side: float(getattr(box, side)) for side in ("top", "left", "bottom", "right")},
             confidence=None if confidence is None else float(confidence),
         )
-    raise BackendError(f"Tipo de resposta não suportado pelo jev-claude: {kind!r}")
+    raise BackendError(f"Tipo de resposta não suportado pelo jev-claud: {kind!r}")

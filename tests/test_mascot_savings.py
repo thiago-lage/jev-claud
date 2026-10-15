@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from jev_claude import CallableWriter, JevClaude
-from jev_claude.cli import main
-from jev_claude.compact import run_filter
-from jev_claude.mascot import ASCII, render
-from jev_claude.mcp import Server
-from jev_claude.savings import COMPACT, TOOLS, human_tokens, record, summary, tokens_from_chars
-from jev_claude.store import Store
-from jev_claude.wizard import UI
+from jev_claud import CallableWriter, JevClaud
+from jev_claud.cli import main
+from jev_claud.compact import run_filter
+from jev_claud.mascot import ASCII, BLOCKS, NAME, render
+from jev_claud.mcp import Server
+from jev_claud.savings import COMPACT, TOOLS, human_tokens, record, summary, tokens_from_chars
+from jev_claud.store import Store
+from jev_claud.wizard import UI
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -23,8 +23,12 @@ ANSI = re.compile(r"\x1b\[[0-9;]*m")
 def test_mascot_renders_as_blocks_or_ascii() -> None:
     blocks = render()
     assert len(blocks) == 4 and len({len(line) for line in blocks}) == 1
-    assert set("".join(blocks)) <= set(" █▀▄")
+    assert set("".join(blocks)) <= set(" " + BLOCKS)
+    # Corpo com as proporções do bonequinho do Claude Code; a forquilha fica em cima.
+    assert blocks[1:] == [" ▐▛███▜▌ ", "▝▜█████▛▘", "  ▘▘ ▝▝  "]
+    assert blocks[0] == "   ▚ ▞   "
     assert render(fancy=False) == list(ASCII)
+    assert NAME == "Jevin"
 
 
 @pytest.mark.parametrize(
@@ -58,7 +62,7 @@ def test_summary_separates_claude_and_jev() -> None:
 def test_record_never_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     blocker = tmp_path / "arquivo"
     blocker.write_text("x", encoding="utf-8")
-    monkeypatch.setenv("JEV_CLAUDE_HOME", str(blocker / "sub"))  # não dá para criar a pasta
+    monkeypatch.setenv("JEV_CLAUD_HOME", str(blocker / "sub"))  # não dá para criar a pasta
     record(COMPACT, 10_000)
 
 
@@ -74,7 +78,7 @@ def test_compaction_records_claude_savings(tmp_path: Path) -> None:
 def test_mcp_file_tools_record_claude_savings(tmp_path: Path) -> None:
     data = tmp_path / "tickets.txt"
     data.write_text("\n".join(f"Fui cobrado duas vezes na fatura {i}" for i in range(300)), encoding="utf-8")
-    server = Server(lambda: JevClaude(store=":memory:", writer=CallableWriter(lambda p, s: "ok")))
+    server = Server(lambda: JevClaud(store=":memory:", writer=CallableWriter(lambda p, s: "ok")))
     response = server.handle(
         {
             "jsonrpc": "2.0",

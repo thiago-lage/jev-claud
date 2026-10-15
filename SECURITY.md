@@ -6,16 +6,16 @@ Não abra uma issue pública. Use o recurso **Security > Report a vulnerability*
 (aviso privado) com uma descrição e, se possível, um exemplo mínimo. A resposta inicial sai
 em até 7 dias.
 
-## Boas práticas ao usar o jev-claude
+## Boas práticas ao usar o jev-claud
 
-- **Chaves ficam no servidor.** `TYPESAFE_API_KEY` e `JEV_CLAUDE_LLM_API_KEY` nunca devem ir
+- **Chaves ficam no servidor.** `TYPESAFE_API_KEY` e `JEV_CLAUD_LLM_API_KEY` nunca devem ir
   para o navegador ou para o repositório. Use variáveis de ambiente ou um cofre de segredos.
-- **O `jev-claude setup` guarda a chave do Jev em `config.json`** (em `JEV_CLAUDE_HOME`), com
+- **O `jev-claud setup` guarda a chave do Jev em `config.json`** (em `JEV_CLAUD_HOME`), com
   permissão só para o seu usuário. Em servidores, prefira a variável `TYPESAFE_API_KEY`.
 - **Os instaladores** baixam apenas de fontes oficiais (GitHub deste repositório, winget,
   Homebrew, ollama.com, claude.ai) e o assistente pergunta antes de cada instalação.
-- **O cache guarda estado e respostas** em SQLite local (`JEV_CLAUDE_HOME`). Se o estado tiver
-  dados pessoais, proteja o diretório ou desligue o cache (`JEV_CLAUDE_CACHE_TTL_DAYS=0`).
+- **O cache guarda estado e respostas** em SQLite local (`JEV_CLAUD_HOME`). Se o estado tiver
+  dados pessoais, proteja o diretório ou desligue o cache (`JEV_CLAUD_CACHE_TTL_DAYS=0`).
 - **Saída tipada garante a interface, não a verdade.** Decisões com impacto (pagamentos,
   exclusões, acesso) devem exigir confiança alta (`Policy`) e, quando possível, revisão humana.
 - O SDK do TypeSafe registra corpos de requisição no log em nível debug; não ative

@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from jev_claud.envvars import getenv
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
     key TEXT PRIMARY KEY,
@@ -52,14 +54,40 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def default_home() -> Path:
-    """Diretório de dados: `JEV_CLAUDE_HOME`, ou o cache do usuário no sistema operacional."""
-    configured = os.environ.get("JEV_CLAUDE_HOME", "").strip()
+    """Diretório de dados: `JEV_CLAUD_HOME`, ou o cache do usuário no sistema operacional.
+
+    Na primeira execução depois da troca de nome, a pasta antiga (`jev-claude`, com a chave
+    do Jev, o cache e os gastos) é renomeada para `jev-claud`; se não der, ela é usada como está.
+    """
+    configured = getenv("JEV_CLAUD_HOME").strip()
     if configured:
         return Path(configured).expanduser()
     if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
-        return Path(os.environ["LOCALAPPDATA"]) / "jev-claude"
-    xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
-    return (Path(xdg) if xdg else Path.home() / ".cache") / "jev-claude"
+        base = Path(os.environ["LOCALAPPDATA"])
+    else:
+        xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
+        base = Path(xdg) if xdg else Path.home() / ".cache"
+    home, old = base / "jev-claud", base / "jev-claude"
+    if not home.exists() and old.is_dir():
+        try:
+            old.rename(home)
+        except OSError:
+            return old
+    return home
+
+
+def _default_db(home: Path) -> Path:
+    """`jev_claud.sqlite3`; o banco da 0.6 (`jev_claude.sqlite3`) é renomeado na primeira vez."""
+    db, old = home / "jev_claud.sqlite3", home / "jev_claude.sqlite3"
+    if not db.exists() and old.exists():
+        for suffix in ("", "-wal", "-shm"):  # arquivos do modo WAL vão junto
+            source = Path(f"{old}{suffix}")
+            if source.exists():
+                try:
+                    source.rename(f"{db}{suffix}")
+                except OSError:
+                    return old
+    return db
 
 
 def current_month() -> str:
@@ -71,7 +99,7 @@ class Store:
 
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
-            path = default_home() / "jev_claude.sqlite3"
+            path = _default_db(default_home())
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)

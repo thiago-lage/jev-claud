@@ -51,8 +51,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e .
-      - run: jev-claude doctor
-      - run: jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
+      - run: jev-claud doctor
+      - run: jev-claud ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 
   installers:
     # Roda os instaladores de uma linha a partir deste checkout, como um usuário novo faria.
@@ -62,9 +62,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
-      JEV_CLAUDE_SPEC: ${{ github.workspace }}[jev]
-      JEV_CLAUDE_NO_MODIFY_PATH: "1"
-      JEV_CLAUDE_SKIP_SETUP: "1"
+      JEV_CLAUD_SPEC: ${{ github.workspace }}[jev]
+      JEV_CLAUD_NO_MODIFY_PATH: "1"
+      JEV_CLAUD_SKIP_SETUP: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -75,13 +75,15 @@ jobs:
         run: |
           bash -n install.sh
           bash install.sh
-          ~/.local/bin/jev-claude --version
-          ~/.local/bin/jev-claude setup --check || true
+          ~/.local/bin/jev-claud --version
+          ~/.local/bin/jev-claude --version  # nome antigo continua funcionando
+          ~/.local/bin/jev-claud setup --check || true
       - name: install.ps1
         if: runner.os == 'Windows'
         shell: powershell
         run: |
           ./install.ps1
+          & "$env:USERPROFILE\.local\bin\jev-claud.cmd" --version
           & "$env:USERPROFILE\.local\bin\jev-claude.cmd" --version
-          & "$env:USERPROFILE\.local\bin\jev-claude.cmd" setup --check
+          & "$env:USERPROFILE\.local\bin\jev-claud.cmd" setup --check
           exit 0

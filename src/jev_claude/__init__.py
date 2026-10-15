@@ -1,67 +1,11 @@
-"""jev-claude — decisões tipadas para o código (TypeSafe Jev) e texto para pessoas (LLM).
+"""Nome antigo do pacote (até a 0.6). Use `jev_claud`: este módulo só repassa para ele.
 
->>> from jev_claude import JevClaude, choice, noul
->>> r = JevClaude()
->>> d = r.decide("Fui cobrado duas vezes!", {
-...     "setor": choice("Qual setor?", {"financeiro": "cobrança, fatura", "suporte": "erro, bug"}),
-...     "urgente": noul("A mensagem pede ação imediata?"),
-... })
->>> d["setor"].value
-'financeiro'
+`from jev_claude import JevClaude` e `python -m jev_claude` continuam funcionando, para o
+código e os atalhos instalados antes da troca de nome não quebrarem.
 """
 
-from jev_claude.backends import JevBackend, OfflineBackend
-from jev_claude.budget import Budget
-from jev_claude.config import Settings
-from jev_claude.core import Case, JevClaude, Ranked
-from jev_claude.decision import Band, Decision, Decisions, Policy, Region
-from jev_claude.errors import (
-    BackendError,
-    BudgetExceeded,
-    JevClaudeError,
-    NoWriterError,
-    QuestionError,
-    WriterError,
-)
-from jev_claude.media import Image
-from jev_claude.questions import Box, Choice, Noul, Score, box, choice, noul, score
-from jev_claude.store import Store
-from jev_claude.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
+from jev_claud import *  # noqa: F403
+from jev_claud import __all__ as _all
+from jev_claud import __version__
 
-__version__ = "0.6.2"
-
-__all__ = [
-    "BackendError",
-    "Band",
-    "Box",
-    "Budget",
-    "BudgetExceeded",
-    "CallableWriter",
-    "Case",
-    "Choice",
-    "Decision",
-    "Decisions",
-    "Image",
-    "JevBackend",
-    "JevClaude",
-    "JevClaudeError",
-    "NoWriterError",
-    "Noul",
-    "OfflineBackend",
-    "OllamaWriter",
-    "OpenAICompatibleWriter",
-    "Policy",
-    "QuestionError",
-    "Ranked",
-    "Region",
-    "Score",
-    "Settings",
-    "Store",
-    "Writer",
-    "WriterError",
-    "__version__",
-    "box",
-    "choice",
-    "noul",
-    "score",
-]
+__all__ = [*_all, "__version__"]

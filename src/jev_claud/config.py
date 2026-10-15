@@ -1,7 +1,7 @@
 """Configuração: variáveis de ambiente > arquivo `config.json` > padrões.
 
-O arquivo fica em `JEV_CLAUDE_HOME` (ou no cache do usuário) e é escrito pelo
-`jev-claude setup`. Variáveis de ambiente sempre têm prioridade sobre ele.
+O arquivo fica em `JEV_CLAUD_HOME` (ou no cache do usuário) e é escrito pelo
+`jev-claud setup`. Variáveis de ambiente sempre têm prioridade sobre ele.
 """
 
 from __future__ import annotations
@@ -13,8 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from jev_claude.budget import USD_PER_MTOK
-from jev_claude.store import default_home
+from jev_claud.budget import USD_PER_MTOK
+from jev_claud.envvars import getenv
+from jev_claud.store import default_home
 
 DAY = 24 * 3600
 STRATEGIES = ("cascade", "jev")
@@ -71,7 +72,7 @@ def save_config(values: Mapping[str, Any], path: Path | None = None) -> Path:
 
 
 def _float(name: str, file_value: Any, default: float) -> float:
-    raw = os.environ.get(name, "").strip()
+    raw = getenv(name).strip()
     if not raw:
         if file_value is None:
             return default
@@ -83,47 +84,47 @@ def _float(name: str, file_value: Any, default: float) -> float:
 
 
 def _text(name: str, file_value: Any) -> str | None:
-    value = os.environ.get(name, "").strip() or (str(file_value).strip() if file_value else "")
+    value = getenv(name).strip() or (str(file_value).strip() if file_value else "")
     return value or None
 
 
 @dataclass(frozen=True)
 class Settings:
     budget_usd: float = 0.0
-    """`JEV_CLAUDE_BUDGET_USD`: teto mensal para o Jev. 0 = custo zero (só offline)."""
+    """`JEV_CLAUD_BUDGET_USD`: teto mensal para o Jev. 0 = custo zero (só offline)."""
     usd_per_mtok: float = USD_PER_MTOK
-    """`JEV_CLAUDE_USD_PER_MTOK`: preço por milhão de tokens de entrada."""
+    """`JEV_CLAUD_USD_PER_MTOK`: preço por milhão de tokens de entrada."""
     model: str = "latest"
-    """`JEV_CLAUDE_MODEL`: latest | preview | newest | jev-X.Y.Z."""
+    """`JEV_CLAUD_MODEL`: latest | preview | newest | jev-X.Y.Z."""
     cache_ttl_days: float = 7.0
-    """`JEV_CLAUDE_CACHE_TTL_DAYS`: validade do cache para aliases (versões fixas não expiram). 0 desliga."""
+    """`JEV_CLAUD_CACHE_TTL_DAYS`: validade do cache para aliases (versões fixas não expiram). 0 desliga."""
     typesafe_api_key: str | None = field(default=None, repr=False)
     """`TYPESAFE_API_KEY`: chave do Jev."""
     ollama_model: str | None = None
-    """`JEV_CLAUDE_OLLAMA_MODEL`: modelo do Ollama para texto (padrão `llama3.2`)."""
+    """`JEV_CLAUD_OLLAMA_MODEL`: modelo do Ollama para texto (padrão `llama3.2`)."""
     strategy: str = "cascade"
-    """`JEV_CLAUDE_STRATEGY`: `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev)."""
+    """`JEV_CLAUD_STRATEGY`: `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev)."""
     cascade_accept: float = 0.8
-    """`JEV_CLAUDE_CASCADE_ACCEPT`: confiança mínima para aceitar a resposta offline na cascata."""
+    """`JEV_CLAUD_CASCADE_ACCEPT`: confiança mínima para aceitar a resposta offline na cascata."""
 
     def __post_init__(self) -> None:
         if self.strategy not in STRATEGIES:
             raise ValueError(
-                f"JEV_CLAUDE_STRATEGY deve ser {' ou '.join(STRATEGIES)}, recebido {self.strategy!r}."
+                f"JEV_CLAUD_STRATEGY deve ser {' ou '.join(STRATEGIES)}, recebido {self.strategy!r}."
             )
         if not 0.0 <= self.cascade_accept <= 1.0:
-            raise ValueError("JEV_CLAUDE_CASCADE_ACCEPT deve estar entre 0 e 1.")
+            raise ValueError("JEV_CLAUD_CASCADE_ACCEPT deve estar entre 0 e 1.")
 
     @classmethod
     def from_env(cls) -> Settings:
         file = load_config()
         return cls(
-            budget_usd=_float("JEV_CLAUDE_BUDGET_USD", file.get("budget_usd"), 0.0),
-            usd_per_mtok=_float("JEV_CLAUDE_USD_PER_MTOK", file.get("usd_per_mtok"), USD_PER_MTOK),
-            model=_text("JEV_CLAUDE_MODEL", file.get("model")) or "latest",
-            cache_ttl_days=_float("JEV_CLAUDE_CACHE_TTL_DAYS", file.get("cache_ttl_days"), 7.0),
+            budget_usd=_float("JEV_CLAUD_BUDGET_USD", file.get("budget_usd"), 0.0),
+            usd_per_mtok=_float("JEV_CLAUD_USD_PER_MTOK", file.get("usd_per_mtok"), USD_PER_MTOK),
+            model=_text("JEV_CLAUD_MODEL", file.get("model")) or "latest",
+            cache_ttl_days=_float("JEV_CLAUD_CACHE_TTL_DAYS", file.get("cache_ttl_days"), 7.0),
             typesafe_api_key=_text("TYPESAFE_API_KEY", file.get("typesafe_api_key")),
-            ollama_model=_text("JEV_CLAUDE_OLLAMA_MODEL", file.get("ollama_model")),
-            strategy=(_text("JEV_CLAUDE_STRATEGY", file.get("strategy")) or "cascade").lower(),
-            cascade_accept=_float("JEV_CLAUDE_CASCADE_ACCEPT", file.get("cascade_accept"), 0.8),
+            ollama_model=_text("JEV_CLAUD_OLLAMA_MODEL", file.get("ollama_model")),
+            strategy=(_text("JEV_CLAUD_STRATEGY", file.get("strategy")) or "cascade").lower(),
+            cascade_accept=_float("JEV_CLAUD_CASCADE_ACCEPT", file.get("cascade_accept"), 0.8),
         )

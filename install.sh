@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# jev-claude - instalador para macOS e Linux.
+# jev-claud - instalador para macOS e Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.sh | bash
 #
 # 1. Encontra o Python 3.10+.
-# 2. Cria um ambiente isolado em ~/.local/share/jev-claude (nao mexe no Python do sistema).
-# 3. Coloca o comando `jev-claude` em ~/.local/bin e garante que essa pasta esta no PATH.
-# 4. Abre o assistente `jev-claude setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
+# 2. Cria um ambiente isolado em ~/.local/share/jev-claud (nao mexe no Python do sistema).
+# 3. Coloca o comando `jev-claud` em ~/.local/bin e garante que essa pasta esta no PATH.
+# 4. Abre o assistente `jev-claud setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
 #
-# Variaveis opcionais: JEV_CLAUDE_SPEC (o que o pip instala), JEV_CLAUDE_INSTALL_DIR,
-# JEV_CLAUDE_BIN_DIR, JEV_CLAUDE_NO_MODIFY_PATH=1, JEV_CLAUDE_SKIP_SETUP=1.
+# Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala), JEV_CLAUD_INSTALL_DIR,
+# JEV_CLAUD_BIN_DIR, JEV_CLAUD_NO_MODIFY_PATH=1, JEV_CLAUD_SKIP_SETUP=1.
 set -euo pipefail
 
-SPEC="${JEV_CLAUDE_SPEC:-jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude}"
-INSTALL_DIR="${JEV_CLAUDE_INSTALL_DIR:-$HOME/.local/share/jev-claude}"
-BIN_DIR="${JEV_CLAUDE_BIN_DIR:-$HOME/.local/bin}"
+SPEC="${JEV_CLAUD_SPEC:-jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud}"
+INSTALL_DIR="${JEV_CLAUD_INSTALL_DIR:-$HOME/.local/share/jev-claud}"
+BIN_DIR="${JEV_CLAUD_BIN_DIR:-$HOME/.local/bin}"
 
 accent=$'\033[38;5;173m'; green=$'\033[32m'; dim=$'\033[2m'; reset=$'\033[0m'
 if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then accent=""; green=""; dim=""; reset=""; fi
@@ -22,7 +22,7 @@ step() { printf '  %s*%s %s\n' "$accent" "$reset" "$1"; }
 ok() { printf '  %s+%s %s\n' "$green" "$reset" "$1"; }
 fail() { printf '  x %s\n' "$1" >&2; exit 1; }
 
-printf '\n  %sjev-claude - instalador%s\n' "$accent" "$reset"
+printf '\n  %sjev-claud - instalador%s\n' "$accent" "$reset"
 printf '  %sJev decide o que o codigo ramifica. LLM escreve o que a pessoa le.%s\n\n' "$dim" "$reset"
 
 # 1. Python ---------------------------------------------------------------------------
@@ -49,19 +49,21 @@ if [ ! -x "$VENV/bin/python" ]; then
   mkdir -p "$INSTALL_DIR"
   "$PYTHON" -m venv "$VENV" || fail "Falha ao criar o ambiente (no Debian/Ubuntu: sudo apt install python3-venv)"
 fi
-step "Instalando jev-claude"
+step "Instalando jev-claud"
 "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --upgrade pip
 "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --upgrade "$SPEC" || fail "Falha ao instalar: $SPEC"
-ok "Instalado: $("$VENV/bin/jev-claude" --version)"
+ok "Instalado: $("$VENV/bin/jev-claud" --version)"
 
 # 3. Comando no PATH ---------------------------------------------------------------------
 mkdir -p "$BIN_DIR"
-ln -sf "$VENV/bin/jev-claude" "$BIN_DIR/jev-claude"
-ok "Comando: $BIN_DIR/jev-claude"
+ln -sf "$VENV/bin/jev-claud" "$BIN_DIR/jev-claud"
+ok "Comando: $BIN_DIR/jev-claud"
+# Nome antigo (ate a 0.6): o atalho `jev-claude` passa a apontar para a instalacao nova.
+ln -sf "$VENV/bin/jev-claud" "$BIN_DIR/jev-claude"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *)
-    if [ -z "${JEV_CLAUDE_NO_MODIFY_PATH:-}" ]; then
+    if [ -z "${JEV_CLAUD_NO_MODIFY_PATH:-}" ]; then
       case "${SHELL:-}" in
         */zsh) RC="$HOME/.zshrc" ;;
         */bash) RC="$HOME/.bashrc" ;;
@@ -69,7 +71,7 @@ case ":$PATH:" in
       esac
       LINE="export PATH=\"$BIN_DIR:\$PATH\""
       if ! grep -qsF "$LINE" "$RC"; then
-        printf '\n# jev-claude\n%s\n' "$LINE" >> "$RC"
+        printf '\n# jev-claud\n%s\n' "$LINE" >> "$RC"
         ok "$BIN_DIR adicionado ao PATH em $RC"
       fi
     fi
@@ -79,13 +81,13 @@ esac
 
 # 4. Assistente --------------------------------------------------------------------------
 echo
-if [ -n "${JEV_CLAUDE_SKIP_SETUP:-}" ]; then
-  ok "Pronto. Rode: jev-claude setup"
+if [ -n "${JEV_CLAUD_SKIP_SETUP:-}" ]; then
+  ok "Pronto. Rode: jev-claud setup"
 elif [ -r /dev/tty ] && (: < /dev/tty) 2>/dev/null; then
   # Com `curl | bash` o stdin e o script; as perguntas leem do terminal.
-  "$VENV/bin/jev-claude" setup < /dev/tty
-  printf '\n  %sAbra um terminal novo para usar o comando jev-claude em qualquer pasta.%s\n' "$dim" "$reset"
+  "$VENV/bin/jev-claud" setup < /dev/tty
+  printf '\n  %sAbra um terminal novo para usar o comando jev-claud em qualquer pasta.%s\n' "$dim" "$reset"
 else
-  "$VENV/bin/jev-claude" setup --check || true
-  ok "Sem terminal interativo. Rode depois: jev-claude setup"
+  "$VENV/bin/jev-claud" setup --check || true
+  ok "Sem terminal interativo. Rode depois: jev-claud setup"
 fi
