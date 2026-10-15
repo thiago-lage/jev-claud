@@ -18,18 +18,27 @@ O plugin é só texto: não roda programas, não grava arquivos e não acessa a 
 
 ## Instalar
 
-No Claude Code 2.1.275 ou mais novo:
+**Pelo diretório de plugins do Claude** (assim que o Jevin for aprovado; o envio está em
+análise):
+
+1. No claude.ai ou no app desktop, abra **Personalização › Plugins**
+   ([claude.ai/customize/plugins](https://claude.ai/customize/plugins); em inglês, *Customize ›
+   Plugins*), vá na aba **Discover**, escolha **Jevin** e clique em **Add**.
+2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
+   celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
+   sozinho ao abrir, com o nome `jevin@synced`.
+
+**Pelo marketplace do projeto** (já funciona; só no Claude Code). No 2.1.275 ou mais novo:
 
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
 ```
 
-Em versões anteriores:
+Em versões anteriores: `/plugin marketplace add thiago-lage/jev-claud` e depois
+`/plugin install jevin@jev-claud`.
 
-```text
-/plugin marketplace add thiago-lage/jev-claud
-/plugin install jevin@jev-claud
-```
+Use um caminho só. Com o Jevin do diretório ativo, a cópia do marketplace impede que ele carregue;
+o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada.
 
 Abra uma sessão nova do Claude Code depois de instalar.
 
@@ -104,17 +113,18 @@ Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
   sessão nova. Pedidos explícitos ("use o scout para...") sempre funcionam.
 - **O plugin aparece com o nome antigo (`jev` ou `jev-claude`):** rode `jev-claud setup`, ou
   desinstale o antigo e instale `jevin@jev-claud`.
+- **O `jevin@synced` aparece como "not loaded":** há também a cópia do marketplace ativa. Rode
+  `claude plugin uninstall jevin@jev-claud` (ou `jev-claud setup`) e abra uma sessão nova.
 - **Outros problemas:** veja o
   [guia de suporte](https://github.com/thiago-lage/jev-claud/blob/main/SUPPORT.md) ou
   [abra uma issue](https://github.com/thiago-lage/jev-claud/issues/new/choose).
 
 ## Desinstalar
 
-```text
-/plugin uninstall jevin@jev-claud
-```
-
-Ou, no terminal: `claude plugin uninstall jevin@jev-claud`.
+- **Pelo diretório:** remova o Jevin em **Personalização › Plugins** no claude.ai. Para só
+  desligar no Claude Code: `claude plugin disable jevin@synced`.
+- **Pelo marketplace:** `/plugin uninstall jevin@jev-claud` (ou, no terminal,
+  `claude plugin uninstall jevin@jev-claud`).
 
 ## Mais informações
 

@@ -66,6 +66,7 @@ class FakeSystem(System):
             "old_plugin": False,
             "old_jev": False,
             "old_mcp": False,
+            "synced": False,  # jevin@synced: adicionado pelo diretório do Claude
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -98,7 +99,12 @@ class FakeSystem(System):
         elif command[1:3] == ["plugin", "install"]:
             self.state["plugin" if command[3] == "jevin@jev-claud" else "skill"] = True
         elif command[1:3] == ["plugin", "uninstall"]:
-            self.state["old_plugin" if command[3] == "jev-claude@jev-claude" else "old_jev"] = False
+            names = {
+                "jev-claude@jev-claude": "old_plugin",
+                "jev@jev-claude": "old_jev",
+                "jevin@jev-claud": "plugin",
+            }
+            self.state[names[command[3]]] = False
         elif command[1:3] == ["mcp", "add"]:
             self.state["mcp"] = True
         elif command[1:3] == ["mcp", "remove"]:
@@ -118,6 +124,7 @@ class FakeSystem(System):
                     ("jevin@jev-claud", "plugin"),
                     ("jev-claude@jev-claude", "old_plugin"),
                     ("jev@jev-claude", "old_jev"),
+                    ("jevin@synced", "synced"),
                 )
                 if self.state[key]
             ]
@@ -541,3 +548,24 @@ def test_windows_shims_cover_both_names(tmp_path: Path) -> None:
     for name in ("jev-claud", "jev-claude"):
         shim = (system.home / ".local" / "bin" / name).read_bytes()
         assert shim == b'#!/bin/sh\nexec "python" -m jev_claud "$@"\n'
+
+
+def test_plugin_from_the_claude_directory_counts_as_installed(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state["synced"] = True
+    ui, out = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    assert report.results["plugin"] is True
+    assert "jevin@synced (diretório do Claude)" in out.getvalue()
+    assert not any(c[1:3] == ["plugin", "install"] and c[3] == "jevin@jev-claud" for c in system.commands)
+
+
+def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Path) -> None:
+    """Com o Jevin do diretório ativo, a cópia do marketplace impede o carregamento: o setup a remove."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(synced=True, plugin=True)
+    ui, out = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    assert "duplicado: o jevin@synced do diretório só carrega sem o jevin@jev-claud" in out.getvalue()
+    assert "/bin/claude plugin uninstall jevin@jev-claud" in [" ".join(c) for c in system.commands]
+    assert report.results["plugin"] is True and system.state["plugin"] is False

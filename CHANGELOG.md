@@ -3,7 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.8.2] - 2026-10-15
+
+### Alterado
+
+- **Jevin pelo diretório de plugins do Claude.** O `jev-claud setup` reconhece o plugin adicionado
+  pelo claude.ai (`jevin@synced`) e não instala a cópia do marketplace. Se as duas estiverem
+  ativas, ele remove a do marketplace, que impediria a do diretório de carregar.
+- READMEs e suporte explicam os dois caminhos de instalação: pelo diretório (**Personalização ›
+  Plugins** no claude.ai, depois da aprovação) e pelo marketplace do projeto.
 
 ### Documentação
 

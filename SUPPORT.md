@@ -20,6 +20,7 @@ Ajuda com o plugin **Jevin** e com o pacote **jev-claud**.
 | `jev-claud: command not found` | Abra um terminal novo (o instalador adiciona `~/.local/bin` ao PATH) ou rode o instalador de novo |
 | O Claude não usa as ferramentas MCP | Confira `claude mcp list` (deve aparecer `jev-claud`) e abra uma sessão nova |
 | O plugin aparece com o nome antigo (`jev` ou `jev-claude`) | Rode `jev-claud setup`: ele troca pelos nomes novos |
+| O `jevin@synced` (do diretório do Claude) aparece como "not loaded" | A cópia do marketplace também está ativa. Rode `claude plugin uninstall jevin@jev-claud` (ou `jev-claud setup`) e abra uma sessão nova |
 | O Ollama não responde | `ollama serve` e `jev-claud setup` (que baixa o modelo, se faltar) |
 
 ## Abrir uma issue
