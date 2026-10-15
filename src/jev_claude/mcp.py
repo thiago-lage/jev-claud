@@ -35,12 +35,13 @@ FALLBACK_PROTOCOL = "2025-06-18"
 
 INSTRUCTIONS = """\
 Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do Claude.
-- Muitos itens para classificar, filtrar ou ranquear, ou um arquivo grande para resumir: chame
-  `classify`, `rank` ou `summarize_file` passando o CAMINHO do arquivo, em vez de lê-lo.
+- Muitos itens para classificar, filtrar ou ranquear, ou um arquivo de dados grande para resumir:
+  chame `classify`, `rank` ou `summarize_file` passando o CAMINHO do arquivo, em vez de lê-lo.
 - Decisão tipada que o código vai ramificar: `decide` (TypeSafe Jev; offline grátis sem orçamento).
-- Rascunho longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local, grátis).
+- Texto em prosa longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local).
   Revise antes de mostrar ao usuário: a LLM local é bem menos capaz que o Claude.
-Para uma pergunta pequena e única, responda direto: chamar a ferramenta custaria mais."""
+Nunca use estas ferramentas para escrever, gerar ou editar código: implemente você mesmo,
+editando os arquivos. Para uma pergunta pequena e única, responda direto."""
 
 _QUESTION_SCHEMA = {
     "type": "object",
@@ -154,8 +155,8 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "write",
         "description": (
-            "Gera texto com a LLM local (Ollama, grátis): rascunhos, variações, traduções simples, textos "
-            "repetitivos. Revise o resultado; para textos importantes, escreva você mesmo."
+            "Gera prosa com a LLM local (Ollama, grátis): rascunhos, variações, traduções simples, textos "
+            "repetitivos. Nunca para código. Revise o resultado; para textos importantes, escreva você mesmo."
         ),
         "inputSchema": {
             "type": "object",

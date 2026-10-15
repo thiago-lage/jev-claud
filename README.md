@@ -147,6 +147,36 @@ ferramentas também custam tokens; o Claude responde direto. E o `llama3.2` (3B)
 capaz que o Claude: use para rascunhos e resumos, e deixe o Claude revisar o que importa. A
 regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
+## Plugin do Claude Code
+
+O plugin junta tudo que poupa contexto **sem mudar a qualidade da entrega**: o Claude continua
+implementando direto (edita arquivos, roda testes); o jev-claude só tira o ruído do caminho.
+
+```text
+/plugin marketplace add thiago-lage/jev-claude
+/plugin install jev-claude@jev-claude
+```
+
+(o `jev-claude setup` faz isso por você). O comando `jev-claude` precisa estar instalado.
+
+| Peça | O que faz | Custo |
+| --- | --- | --- |
+| Hook `PreToolUse` | Testes, builds e linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) rodam via `jev-claude run`: saídas acima de ~80 linhas chegam com o começo, o fim e as linhas de erro com contexto. A saída completa fica num arquivo citado no rodapé. O código de saída é o do comando original | zero (sem LLM) |
+| Skill `jev` | Ensina quando usar Jev, LLM ou código puro, e quando as ferramentas MCP compensam. Só entra no contexto quando é relevante | — |
+| Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
+
+Detalhes do hook:
+
+- **Não aprova nada sozinho**: o comando reescrito passa pelas mesmas permissões. Na primeira
+  vez o Claude Code pergunta; escolha "não perguntar de novo" para o `... -m jev_claude run`.
+- **Conservador**: só mexe em comandos simples; com `|`, `>`, `&&`, `;`, `$(...)` ou em segundo
+  plano, nada muda. O `jev-claude run` recusa qualquer comando que não seja teste/build/lint.
+- **Desligar**: `JEV_CLAUDE_COMPACT=0` (no ambiente ou na frente de um comando).
+- Teste real (este repositório, `pytest -v`): 174 linhas viraram 64, com o resumo final intacto.
+
+O servidor MCP continua registrado pelo `setup` (com o caminho absoluto do Python, que funciona
+em todos os sistemas), e a regra global agora diz explicitamente para implementar direto.
+
 ## Configuração (tudo opcional)
 
 O `jev-claude setup` grava `config.json` em `JEV_CLAUDE_HOME`. Variáveis de ambiente sempre
@@ -238,6 +268,8 @@ r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, sys
 ```bash
 jev-claude setup                        # assistente: instala e configura tudo
 jev-claude mcp                          # servidor MCP (stdio) usado pelo Claude Code
+jev-claude run -- pytest -x            # roda teste/build e compacta a saída (sem LLM)
+npm test 2>&1 | jev-claude compact     # o mesmo, como filtro de texto
 jev-claude doctor                       # backends ativos, modelo, orçamento, cache
 jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 jev-claude ask "Preciso disso hoje" --noul "É urgente?"

@@ -112,6 +112,11 @@ New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 $shim = Join-Path $BinDir "jev-claude.cmd"
 Set-Content -Path $shim -Encoding ASCII -Value "@echo off`r`n`"$venvPython`" -m jev_claude %*"
 Write-Ok "Comando: $shim"
+# Atalho sem extensao para o Git Bash (usado pelo Claude Code e pelos hooks do plugin),
+# que nao encontra arquivos .cmd. Fim de linha LF: o bash rejeita CRLF no shebang.
+$bashShim = Join-Path $BinDir "jev-claude"
+$posixPython = $venvPython -replace '\\', '/'
+[System.IO.File]::WriteAllText($bashShim, "#!/bin/sh`nexec `"$posixPython`" -m jev_claude `"`$@`"`n")
 if (-not $env:JEV_CLAUDE_NO_MODIFY_PATH) {
     if (Add-ToUserPath $BinDir) { Write-Ok "$BinDir adicionado ao PATH do usuario" }
     Update-SessionPath

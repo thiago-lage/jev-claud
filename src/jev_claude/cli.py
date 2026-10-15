@@ -1,15 +1,19 @@
-"""Linha de comando: `jev-claude setup | mcp | doctor | ask | write | models | spend | update | cache`."""
+"""Linha de comando do jev-claude.
+
+Subcomandos: setup, mcp, compact, run, hook, doctor, ask, write, models, spend, update, cache.
+"""
 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import subprocess
 import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from jev_claude import __version__
 from jev_claude.core import JevClaude
@@ -59,6 +63,21 @@ def _parser() -> argparse.ArgumentParser:
 
     mcp = sub.add_parser("mcp", help="servidor MCP (stdio) para o Claude delegar decisões e textos")
     mcp.set_defaults(standalone=_mcp)
+
+    compact = sub.add_parser(
+        "compact", help="compacta a saída longa de um teste/build lida da entrada (sem LLM, grátis)"
+    )
+    compact.set_defaults(standalone=_compact)
+
+    run = sub.add_parser(
+        "run", help="roda um teste/build e compacta a saída, mantendo o código de saída (ex.: run -- pytest)"
+    )
+    run.add_argument("command", nargs=argparse.REMAINDER, help="o comando, depois de --")
+    run.set_defaults(standalone=_run)
+
+    hook = sub.add_parser("hook", help="hooks do plugin do Claude Code (lê o evento JSON da entrada)")
+    hook.add_argument("name", choices=["pre-bash"])
+    hook.set_defaults(standalone=_hook)
 
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
@@ -191,6 +210,33 @@ def _mcp(args: argparse.Namespace) -> int:
     from jev_claude.mcp import serve
 
     return serve()
+
+
+def _utf8_streams() -> tuple[TextIO, TextIO]:
+    """Entrada e saída em UTF-8 mesmo no console do Windows (logs trazem qualquer caractere)."""
+    for stream in (sys.stdin, sys.stdout):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    return sys.stdin, sys.stdout
+
+
+def _compact(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_filter
+
+    return run_filter(*_utf8_streams())
+
+
+def _run(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_command
+
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    return run_command(command, _utf8_streams()[1])
+
+
+def _hook(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_hook
+
+    return run_hook(args.name, *_utf8_streams())
 
 
 def _installed_editable() -> bool:

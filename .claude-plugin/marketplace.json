@@ -1,0 +1,13 @@
+{
+  "name": "jev-claude",
+  "description": "Marketplace do jev-claude: um plugin que poupa contexto e custo no Claude Code.",
+  "owner": { "name": "Thiago Lage", "url": "https://github.com/thiago-lage" },
+  "plugins": [
+    {
+      "name": "jev-claude",
+      "source": "./",
+      "description": "Saídas compactadas, ferramentas MCP de lote, subagente explorador e a regra Jev vs. LLM.",
+      "category": "productivity"
+    }
+  ]
+}

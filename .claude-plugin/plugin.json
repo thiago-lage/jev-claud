@@ -1,0 +1,20 @@
+{
+  "name": "jev-claude",
+  "displayName": "Jev Claude",
+  "version": "0.4.0",
+  "description": "Poupa contexto e custo no Claude Code: saídas de testes/builds compactadas, ferramentas MCP que processam arquivos grandes fora do contexto, subagente explorador e a regra Jev (código ramifica) vs. LLM (pessoa lê).",
+  "author": {
+    "name": "Thiago Lage"
+  },
+  "homepage": "https://github.com/thiago-lage/jev-claude#readme",
+  "repository": "https://github.com/thiago-lage/jev-claude",
+  "license": "MIT",
+  "keywords": [
+    "typesafe",
+    "jev",
+    "ollama",
+    "context",
+    "tokens",
+    "mcp"
+  ]
+}

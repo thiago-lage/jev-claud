@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-10-15
+
+### Adicionado
+
+- Plugin do Claude Code (`/plugin install jev-claude@jev-claude`, o repositório é o próprio
+  marketplace): hook que compacta saídas de testes/builds, skill `jev` e subagente `scout`.
+- `jev-claude run -- <comando>`: roda um teste/build, compacta a saída sem LLM, guarda a saída
+  completa em `logs/` e sai com o código do comando. Recusa comandos que não sejam teste/build/lint.
+- `jev-claude compact` (filtro de texto) e `jev-claude hook pre-bash` (usado pelo plugin).
+- `jev-claude setup` instala o plugin e, no Windows, cria o atalho `jev-claude` para o Git Bash.
+
+### Corrigido
+
+- A regra global podia levar o Claude Code a devolver código no chat ou delegar "rascunhos" ao
+  Ollama em vez de implementar. A regra (versão 2) e as instruções do MCP agora dizem para
+  implementar direto e nunca usar o Ollama/Jev para código. O `setup` substitui a versão antiga.
+
 ## [0.3.1] - 2026-10-15
 
 ### Corrigido

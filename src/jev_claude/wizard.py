@@ -8,7 +8,8 @@ Detecta o que falta, explica para que serve e pergunta antes de instalar cada pe
 4. Chave e orçamento do Jev           opcional; guardados em `config.json`
 5. Claude Code + skill TypeSafe       o agente que usa tudo isso
 6. Servidor MCP `jev-claude`          o Claude delega lotes ao Jev/Ollama e economiza tokens
-7. Regra global no `~/.claude/CLAUDE.md`
+7. Plugin `jev-claude` no Claude Code  saídas compactadas, skill e subagente explorador
+8. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
 
 Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e `--check`
 (só verifica; código de saída 1 se faltar algo essencial).
@@ -36,21 +37,38 @@ from jev_claude.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 REPO_URL = "https://github.com/thiago-lage/jev-claude"
 PACKAGE_SPEC = f"jev-claude[jev] @ git+{REPO_URL}"
 TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
+PLUGIN_REPO = "thiago-lage/jev-claude"
+PLUGIN_MARKETPLACE = "jev-claude"
+PLUGIN_ID = f"jev-claude@{PLUGIN_MARKETPLACE}"
 RULE_START = "<!-- jev-claude:start -->"
 RULE_END = "<!-- jev-claude:end -->"
+RULE_VERSION = 2
 CLAUDE_RULE = f"""{RULE_START}
-## Decisão estruturada (Jev) vs. texto (LLM)
+<!-- versão {RULE_VERSION}: o `jev-claude setup` substitui este bloco inteiro ao atualizar -->
+## Como trabalhar
+
+- Pedido de mudança em código: **implemente direto**. Edite os arquivos, rode os testes e
+  mostre o resultado. Não devolva o código no chat para a pessoa colar, a não ser que ela peça.
+- Nunca delegue escrita ou edição de código ao Ollama/Jev: a qualidade da entrega é sua.
+  As ferramentas `jev-claude` só servem para poupar contexto (ver abaixo).
+
+## Quando o código que você escreve usa IA: Jev vs. LLM
 
 - Saída de IA que o **código consome para ramificar** (if/switch, roteamento, filtros, ranking,
   validação): use **TypeSafe Jev** (`choice`, `noul`, `score`) via `jev-claude`
   (`from jev_claude import JevClaude`). Não peça JSON a uma LLM para depois fazer parse.
 - Saída que **uma pessoa vai ler**: use **LLM** (`JevClaude.write`, Ollama local por padrão).
 - Regras conhecidas, cálculos e buscas exatas ficam em código puro.
-- Para economizar tokens, use as ferramentas MCP `jev-claude` em trabalho em lote: `classify`,
-  `rank` e `summarize_file` recebem o CAMINHO do arquivo (os dados não entram no contexto);
-  `write` gera rascunhos com o Ollama local. Para perguntas pequenas e únicas, responda direto.
 - Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claude setup`).
 - Leia https://docs.typesafe.ai/llms.txt e use a skill `typesafe:typesafe-ai` ao integrar.
+
+## Poupar contexto
+
+- Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
+  MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
+- Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
+- Saídas longas de testes e builds já chegam compactadas pelo hook do plugin; a saída completa
+  fica no caminho indicado no rodapé, se precisar.
 {RULE_END}
 """
 
@@ -432,6 +450,15 @@ class Setup:
                 essential=False,
             ),
             Step(
+                "plugin",
+                "Plugin jev-claude no Claude Code",
+                self._check_plugin,
+                self._install_plugin,
+                "Instalar o plugin (saídas de teste compactadas, skill e subagente explorador)?",
+                requires=("claude",),
+                essential=False,
+            ),
+            Step(
                 "rule",
                 "Regra global no ~/.claude/CLAUDE.md",
                 self._check_rule,
@@ -659,18 +686,66 @@ class Setup:
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
         return ok
 
+    def _bash_shim(self) -> Path:
+        return self.sys.home / ".local" / "bin" / "jev-claude"
+
+    def _check_plugin(self) -> tuple[bool, str]:
+        path = self._claude()
+        if not path:
+            return False, "precisa do Claude Code"
+        code, output = self.sys.capture([path, "plugin", "list"])
+        if code != 0 or PLUGIN_ID not in output:
+            return False, "não instalado"
+        if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
+            return False, "falta o atalho do jev-claude para o Git Bash"
+        return True, PLUGIN_ID
+
+    def _install_plugin(self) -> bool:
+        path = self._claude()
+        if not path:
+            return False
+        if self.sys.platform == "win32":
+            self._write_bash_shim()
+        _, output = self.sys.capture([path, "plugin", "list"])
+        if PLUGIN_ID in output:
+            return True
+        _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
+        added = PLUGIN_MARKETPLACE in marketplaces
+        if not added and self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
+            return False
+        ok = self.sys.run([path, "plugin", "install", PLUGIN_ID]) == 0
+        if ok:
+            self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
+        return ok
+
+    def _write_bash_shim(self) -> None:
+        """No Windows, o Claude Code roda comandos no Git Bash, que não acha `jev-claude.cmd`."""
+        shim = self._bash_shim()
+        python = Path(self.sys.python).as_posix()
+        shim.parent.mkdir(parents=True, exist_ok=True)
+        shim.write_bytes(f'#!/bin/sh\nexec "{python}" -m jev_claude "$@"\n'.encode())
+
     # -- regra global ------------------------------------------------------------------
 
     def _check_rule(self) -> tuple[bool, str]:
         if self.sys.exists(self.claude_md):
             text = self.claude_md.read_text(encoding="utf-8")
-            if RULE_START in text or "TypeSafe Jev" in text:
+            if CLAUDE_RULE.strip() in text:
                 return True, str(self.claude_md)
+            if RULE_START in text:
+                return False, "versão antiga (não pede para implementar direto)"
         return False, "Claude não sabe quando usar Jev ou LLM"
 
     def _write_rule(self) -> bool:
+        """Acrescenta a regra ou troca o bloco antigo entre os marcadores, preservando o resto."""
         self.claude_md.parent.mkdir(parents=True, exist_ok=True)
         current = self.claude_md.read_text(encoding="utf-8") if self.claude_md.exists() else ""
+        start = current.find(RULE_START)
+        end = current.find(RULE_END, start)
+        if start != -1 and end != -1:
+            tail = current[end + len(RULE_END) :].removeprefix("\n")
+            self.claude_md.write_text(current[:start] + CLAUDE_RULE + tail, encoding="utf-8")
+            return True
         separator = "\n" if current and not current.endswith("\n") else ""
         spacer = "\n" if current else ""
         self.claude_md.write_text(current + separator + spacer + CLAUDE_RULE, encoding="utf-8")
