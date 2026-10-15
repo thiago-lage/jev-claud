@@ -22,6 +22,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -31,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TextIO
 
+from jev_claude import mascot
 from jev_claude.config import config_path, load_config, save_config
 from jev_claude.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
@@ -142,6 +144,7 @@ class System:
 
 class UI:
     _ACCENT = "38;5;173"  # laranja-terracota do Claude
+    _MASCOT = "38;5;73"  # verde-azulado do Jev
 
     def __init__(
         self,
@@ -169,25 +172,41 @@ class UI:
     def line(self, text: str = "") -> None:
         print(text, file=self.out, flush=True)
 
-    def banner(self, version: str) -> None:
+    def banner(
+        self, version: str, *, title: str = "Bem-vindo ao jev-claude setup!", footer: str | None = None
+    ) -> None:
+        """Caixa de boas-vindas com o mascote à esquerda; `footer` sai em cinza logo abaixo."""
         s = self.sym
-        lines = [
-            f"{s['star']} Bem-vindo ao jev-claude setup!",
-            "",
-            "  Jev decide o que o código ramifica.",
-            "  LLM escreve o que a pessoa lê.",
-            "  Custo zero por padrão.",
-            "",
-            f"  v{version} · {REPO_URL.removeprefix('https://')}",
+        art = mascot.render(_can_encode(self.out, mascot.BLOCKS))
+        text = [
+            title,
+            "Jev decide o que o código ramifica.",
+            "LLM escreve o que a pessoa lê.",
+            "Custo zero por padrão.",
         ]
-        width = max(len(text) for text in lines) + 2
+        art_width = max(map(len, art))
+        version_line = f"v{version} · {REPO_URL.removeprefix('https://')}"
+        height = max(len(art), len(text))
+        # Cada linha: (figura do mascote, texto). O texto fica sempre na mesma coluna.
+        rows = [("", "")]
+        rows += [(art[i] if i < len(art) else "", text[i] if i < len(text) else "") for i in range(height)]
+        rows += [("", ""), ("", version_line)]
+        width = max(len(words) for _, words in rows) + art_width + 7
+        border = self.paint(s["v"], self._ACCENT)
         self.line(self.paint(s["tl"] + s["h"] * width + s["tr"], self._ACCENT))
-        for index, text in enumerate(lines):
-            body = text.ljust(width - 1)
-            if index == 0:
-                body = self.paint(body, "1")
-            self.line(f"{self.paint(s['v'], self._ACCENT)} {body}{self.paint(s['v'], self._ACCENT)}")
+        for figure, words in rows:
+            pad = " " * (width - art_width - 5 - len(words))
+            if words == title:
+                styled = self.paint(words, "1")
+            elif words == version_line:
+                styled = self.paint(words, "2")
+            else:
+                styled = words
+            figure_part = self.paint(figure.ljust(art_width), self._MASCOT) if figure else " " * art_width
+            self.line(f"{border}  {figure_part}   {styled}{pad}{border}")
         self.line(self.paint(s["bl"] + s["h"] * width + s["br"], self._ACCENT))
+        if footer:
+            self.line(self.paint(f"  {footer}", "2"))
         self.line()
 
     def status(self, kind: Literal["ok", "no", "skip"], title: str, detail: str = "") -> None:
@@ -313,7 +332,7 @@ class Setup:
         if mode == "interactive" and not self.ui.interactive:
             self.ui.note("Terminal não interativo: só verificando. Use --yes para instalar sem perguntas.")
             mode = "check"
-        self.ui.banner(self.version)
+        self.ui.banner(self.version, footer=savings_footer())
         report = Report()
         for step in self.steps():
             report.results[step.key] = ok = self._run_step(step, mode, report.results)
@@ -750,6 +769,23 @@ class Setup:
         spacer = "\n" if current else ""
         self.claude_md.write_text(current + separator + spacer + CLAUDE_RULE, encoding="utf-8")
         return True
+
+
+def savings_footer() -> str | None:
+    """Linha de economia do mês para o rodapé do banner; None se não der para ler o banco."""
+    from jev_claude.savings import summary
+    from jev_claude.store import Store
+
+    try:
+        store = Store()
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        return summary(store)
+    except sqlite3.Error:
+        return None
+    finally:
+        store.close()
 
 
 def run_setup(mode: Mode = "interactive", *, ollama_model: str | None = None, version: str = "") -> int:

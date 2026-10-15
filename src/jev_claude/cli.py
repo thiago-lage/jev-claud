@@ -35,7 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if argv is None and needs_first_run():
             # Como o `claude` na primeira vez: abre o assistente em vez da ajuda.
             return run_setup("interactive", version=__version__)
-        parser.print_help()
+        _splash()
         return 0
     try:
         with JevClaude() as r:
@@ -150,6 +150,7 @@ def _doctor(r: JevClaude, args: argparse.Namespace) -> int:
         print(f"  estratégia   : {r.strategy}  (offline aceito com confiança >= {r.cascade_accept:.2f})")
     print(f"\nCache: {status['cache']['entries']} decisões em {status['cache']['path']}")
     _print_routing(r)
+    _print_savings(r)
     return 0
 
 
@@ -216,7 +217,38 @@ def _spend(r: JevClaude, args: argparse.Namespace) -> int:
     for month, usd, tokens, calls in rows:
         print(f"{month}  US$ {usd:.6f}  {tokens} tokens  {calls} chamadas")
     _print_routing(r)
+    _print_savings(r)
     return 0
+
+
+COMMANDS = (
+    ("setup", "instala e configura tudo (Ollama, Claude Code, plugin)"),
+    ("doctor", "o que está ativo, orçamento e cache"),
+    ("spend", "gastos e economia do mês"),
+    ('ask "texto" --noul "pergunta?"', "decisão tipada pela linha de comando"),
+    ('write "instrução"', "texto com a LLM local"),
+    ("update", "atualiza o jev-claude e o SDK do Jev"),
+)
+
+
+def _splash() -> None:
+    """`jev-claude` sem argumentos: o mascote, os comandos principais e a economia do mês."""
+    from jev_claude.wizard import UI, savings_footer
+
+    ui = UI()
+    ui.banner(__version__, title="jev-claude", footer=savings_footer())
+    width = max(len(name) for name, _ in COMMANDS)
+    for name, description in COMMANDS:
+        ui.line(f"  {ui.paint(f'jev-claude {name:<{width}}', '1')}  {ui.paint(description, '2')}")
+    ui.line(ui.paint("\n  Todos os comandos: jev-claude -h", "2"))
+
+
+def _print_savings(r: JevClaude) -> None:
+    from jev_claude.savings import summary
+    from jev_claude.wizard import UI
+
+    ui = UI()
+    ui.line(ui.paint(f"\n{summary(r.store)}", "2"))
 
 
 ROUTING_LABELS = {

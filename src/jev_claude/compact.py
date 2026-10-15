@@ -27,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
+from jev_claude import savings
 from jev_claude.store import default_home
 
 MIN_LINES = 80
@@ -132,6 +133,7 @@ def write_compacted(text: str, stdout: TextIO, *, log_dir: Path | None = None) -
         stdout.write(text)
         return
     path = save_log(text, log_dir)
+    savings.record(savings.COMPACT, len(text) - len(compacted))
     before, after = len(text.splitlines()), len(compacted.splitlines())
     where = f"; completa em {path}" if path else ""
     stdout.write(f"{compacted}\n[jev-claude] saída compactada: {before} -> {after} linhas{where}\n")

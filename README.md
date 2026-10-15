@@ -5,6 +5,10 @@
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claude/main/docs/terminal.png" alt="Terminal do jev-claude: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
+</p>
+
 `jev-claude` separa as duas saídas de IA que um app tem:
 
 | Quem consome a resposta? | Use | Motor | Por quê |

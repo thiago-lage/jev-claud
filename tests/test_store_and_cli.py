@@ -112,6 +112,8 @@ def test_cli_write_without_llm(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Ollama" in capsys.readouterr().err
 
 
-def test_cli_without_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_without_command_shows_splash(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 0
-    assert "usage" in capsys.readouterr().out.lower()
+    out = capsys.readouterr().out
+    assert "jev-claude setup" in out and "jev-claude -h" in out
+    assert "nenhuma economia registrada ainda este mês" in out

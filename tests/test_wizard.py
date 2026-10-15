@@ -316,7 +316,7 @@ def test_ui_uses_unicode_when_terminal_supports_it() -> None:
     ui.status("ok", "Tudo certo")
     out.flush()
     text = out.buffer.getvalue().decode("utf-8")  # type: ignore[attr-defined]
-    assert "✻" in text and "╭" in text and "✔" in text and "\x1b[" in text
+    assert "█" in text and "╭" in text and "✔" in text and "\x1b[" in text  # mascote em blocos
 
 
 def test_ui_confirm_defaults_and_eof() -> None:

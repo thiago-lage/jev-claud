@@ -28,7 +28,7 @@ from jev_claude.questions import Box, Choice, Noul, Score, box, choice, noul, sc
 from jev_claude.store import Store
 from jev_claude.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "BackendError",
