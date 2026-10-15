@@ -1,14 +1,14 @@
-# jev-claude - instalador para Windows (PowerShell 5.1+).
+# jev-claud - instalador para Windows (PowerShell 5.1+).
 #
-#   irm https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.ps1 | iex
 #
 # 1. Encontra (ou oferece instalar) o Python 3.10+.
-# 2. Cria um ambiente isolado em ~\.local\share\jev-claude (nao mexe no Python global).
-# 3. Coloca o comando `jev-claude` em ~\.local\bin e garante que essa pasta esta no PATH.
-# 4. Abre o assistente `jev-claude setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
+# 2. Cria um ambiente isolado em ~\.local\share\jev-claud (nao mexe no Python global).
+# 3. Coloca o comando `jev-claud` em ~\.local\bin e garante que essa pasta esta no PATH.
+# 4. Abre o assistente `jev-claud setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
 #
-# Variaveis opcionais: JEV_CLAUDE_SPEC (o que o pip instala), JEV_CLAUDE_INSTALL_DIR,
-# JEV_CLAUDE_BIN_DIR, JEV_CLAUDE_NO_MODIFY_PATH=1, JEV_CLAUDE_SKIP_SETUP=1.
+# Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala), JEV_CLAUD_INSTALL_DIR,
+# JEV_CLAUD_BIN_DIR, JEV_CLAUD_NO_MODIFY_PATH=1, JEV_CLAUD_SKIP_SETUP=1.
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -19,9 +19,9 @@ function Get-Setting($name, $default) {
     return $value
 }
 
-$Spec = Get-Setting "JEV_CLAUDE_SPEC" "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"
-$InstallDir = Get-Setting "JEV_CLAUDE_INSTALL_DIR" (Join-Path $env:USERPROFILE ".local\share\jev-claude")
-$BinDir = Get-Setting "JEV_CLAUDE_BIN_DIR" (Join-Path $env:USERPROFILE ".local\bin")
+$Spec = Get-Setting "JEV_CLAUD_SPEC" "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"
+$InstallDir = Get-Setting "JEV_CLAUD_INSTALL_DIR" (Join-Path $env:USERPROFILE ".local\share\jev-claud")
+$BinDir = Get-Setting "JEV_CLAUD_BIN_DIR" (Join-Path $env:USERPROFILE ".local\bin")
 
 function Write-Step($text) { Write-Host "  * $text" -ForegroundColor DarkYellow }
 function Write-Ok($text) { Write-Host "  + $text" -ForegroundColor Green }
@@ -60,13 +60,13 @@ function Add-ToUserPath($dir) {
         $key.Close()
     }
     # Avisa o Windows para os proximos terminais enxergarem o PATH novo.
-    [Environment]::SetEnvironmentVariable("JEV_CLAUDE_PATH_REFRESH", "1", "User")
-    [Environment]::SetEnvironmentVariable("JEV_CLAUDE_PATH_REFRESH", $null, "User")
+    [Environment]::SetEnvironmentVariable("JEV_CLAUD_PATH_REFRESH", "1", "User")
+    [Environment]::SetEnvironmentVariable("JEV_CLAUD_PATH_REFRESH", $null, "User")
     return $true
 }
 
 Write-Host ""
-Write-Host "  jev-claude - instalador" -ForegroundColor DarkYellow
+Write-Host "  jev-claud - instalador" -ForegroundColor DarkYellow
 Write-Host "  Jev decide o que o codigo ramifica. LLM escreve o que a pessoa le." -ForegroundColor DarkGray
 Write-Host ""
 
@@ -99,36 +99,39 @@ if (-not (Test-Path $venvPython)) {
     & $pyExe @pyArgs -m venv $venv
     if ($LASTEXITCODE -ne 0) { throw "Falha ao criar o ambiente virtual." }
 }
-Write-Step "Instalando jev-claude"
+Write-Step "Instalando jev-claud"
 & $venvPython -m pip install --quiet --disable-pip-version-check --upgrade pip
 & $venvPython -m pip install --quiet --disable-pip-version-check --upgrade $Spec
 if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar: $Spec" }
-Write-Ok ("Instalado: " + (& $venvPython -m jev_claude --version))
+Write-Ok ("Instalado: " + (& $venvPython -m jev_claud --version))
 
 # 3. Comando no PATH ---------------------------------------------------------------------
-# O atalho chama `python -m jev_claude` (e nao o jev-claude.exe): assim o `jev-claude update`
+# O atalho chama `python -m jev_claud` (e nao o jev-claud.exe): assim o `jev-claud update`
 # consegue substituir o proprio pacote, ja que o Windows trava executaveis em uso.
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-$shim = Join-Path $BinDir "jev-claude.cmd"
-Set-Content -Path $shim -Encoding ASCII -Value "@echo off`r`n`"$venvPython`" -m jev_claude %*"
+$shim = Join-Path $BinDir "jev-claud.cmd"
+Set-Content -Path $shim -Encoding ASCII -Value "@echo off`r`n`"$venvPython`" -m jev_claud %*"
 Write-Ok "Comando: $shim"
 # Atalho sem extensao para o Git Bash (usado pelo Claude Code e pelos hooks do plugin),
 # que nao encontra arquivos .cmd. Fim de linha LF: o bash rejeita CRLF no shebang.
-$bashShim = Join-Path $BinDir "jev-claude"
+# Os dois nomes: `jev-claud` e o antigo `jev-claude` (ate a 0.6), apontando para a instalacao nova.
 $posixPython = $venvPython -replace '\\', '/'
-[System.IO.File]::WriteAllText($bashShim, "#!/bin/sh`nexec `"$posixPython`" -m jev_claude `"`$@`"`n")
-if (-not $env:JEV_CLAUDE_NO_MODIFY_PATH) {
+foreach ($name in @("jev-claud", "jev-claude")) {
+    Set-Content -Path (Join-Path $BinDir "$name.cmd") -Encoding ASCII -Value "@echo off`r`n`"$venvPython`" -m jev_claud %*"
+    [System.IO.File]::WriteAllText((Join-Path $BinDir $name), "#!/bin/sh`nexec `"$posixPython`" -m jev_claud `"`$@`"`n")
+}
+if (-not $env:JEV_CLAUD_NO_MODIFY_PATH) {
     if (Add-ToUserPath $BinDir) { Write-Ok "$BinDir adicionado ao PATH do usuario" }
     Update-SessionPath
 }
 
 # 4. Assistente --------------------------------------------------------------------------
-if ($env:JEV_CLAUDE_SKIP_SETUP) {
+if ($env:JEV_CLAUD_SKIP_SETUP) {
     Write-Host ""
-    Write-Host "  Pronto. Rode: jev-claude setup" -ForegroundColor Green
+    Write-Host "  Pronto. Rode: jev-claud setup" -ForegroundColor Green
 } else {
     Write-Host ""
-    & $venvPython -m jev_claude setup
+    & $venvPython -m jev_claud setup
     Write-Host ""
-    Write-Host "  Abra um terminal novo para usar o comando jev-claude em qualquer pasta." -ForegroundColor DarkGray
+    Write-Host "  Abra um terminal novo para usar o comando jev-claud em qualquer pasta." -ForegroundColor DarkGray
 }

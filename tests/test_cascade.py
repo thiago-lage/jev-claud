@@ -12,10 +12,10 @@ from typesafe_sdk import BoxAnswer, BoxCoordinates
 from typesafe_sdk import Image as SdkImage
 
 from conftest import FakeClient, choice_answer, noul_answer, score_answer
-from jev_claude import Band, Box, Budget, Image, JevBackend, JevClaude, Settings, box, choice, noul
-from jev_claude.budget import REQUEST_OVERHEAD_TOKENS
-from jev_claude.errors import BackendError, QuestionError
-from jev_claude.media import IMAGE_TOKENS
+from jev_claud import Band, Box, Budget, Image, JevBackend, JevClaud, Settings, box, choice, noul
+from jev_claud.budget import REQUEST_OVERHEAD_TOKENS
+from jev_claud.errors import BackendError, QuestionError
+from jev_claud.media import IMAGE_TOKENS
 
 SETOR = choice(
     "Qual setor?",
@@ -24,7 +24,7 @@ SETOR = choice(
 URGENTE = noul("A mensagem pede ação imediata?")
 OBVIO = "Fui cobrado duas vezes na fatura, quero reembolso"  # offline acerta o setor com folga
 
-Factory = Callable[..., JevClaude]
+Factory = Callable[..., JevClaud]
 
 
 def answers_for(**by_name: Any) -> Callable[[Any], dict[str, Any]]:
@@ -117,7 +117,7 @@ def test_mixed_result_is_cached_whole(make_jev: Factory) -> None:
 def test_budget_exhausted_falls_back_to_offline(make_jev: Factory, caplog: pytest.LogCaptureFixture) -> None:
     client = FakeClient()
     r = make_jev(client, strategy="cascade", budget=0.0)
-    with caplog.at_level(logging.WARNING, logger="jev_claude"):
+    with caplog.at_level(logging.WARNING, logger="jev_claud"):
         d = r.decide(OBVIO, {"setor": SETOR, "urgente": URGENTE})
     assert client.calls == []
     assert d.source == "offline" and d["setor"].value == "financeiro"
@@ -133,18 +133,18 @@ def test_jev_down_falls_back_or_raises(make_jev: Factory) -> None:
 
 
 def test_strategy_comes_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JEV_CLAUDE_STRATEGY", "JEV")
-    monkeypatch.setenv("JEV_CLAUDE_CASCADE_ACCEPT", "0,9")
+    monkeypatch.setenv("JEV_CLAUD_STRATEGY", "JEV")
+    monkeypatch.setenv("JEV_CLAUD_CASCADE_ACCEPT", "0,9")
     settings = Settings.from_env()
     assert settings.strategy == "jev" and settings.cascade_accept == 0.9
     assert Settings().strategy == "cascade"
-    monkeypatch.setenv("JEV_CLAUDE_STRATEGY", "tudo")
+    monkeypatch.setenv("JEV_CLAUD_STRATEGY", "tudo")
     with pytest.raises(ValueError, match="cascade ou jev"):
         Settings.from_env()
     with pytest.raises(ValueError):
-        JevClaude(jev=None, writer=None, store=":memory:", strategy="x")  # type: ignore[arg-type]
+        JevClaud(jev=None, writer=None, store=":memory:", strategy="x")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        JevClaude(jev=None, writer=None, store=":memory:", cascade_accept=1.5)
+        JevClaud(jev=None, writer=None, store=":memory:", cascade_accept=1.5)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def test_box_answers_become_regions(make_jev: Factory, confidence: float | None,
 
 def test_box_needs_jev() -> None:
     with (
-        JevClaude(jev=None, writer=None, store=":memory:") as r,
+        JevClaud(jev=None, writer=None, store=":memory:") as r,
         pytest.raises(BackendError, match="Box exige"),
     ):
         r.decide(Image(PNG), {"dano": Box("Onde está o dano?")})
@@ -235,8 +235,8 @@ def test_box_needs_jev() -> None:
 
 def test_image_offline_warns_once(caplog: pytest.LogCaptureFixture) -> None:
     with (
-        JevClaude(jev=None, writer=None, store=":memory:") as r,
-        caplog.at_level(logging.WARNING, "jev_claude"),
+        JevClaud(jev=None, writer=None, store=":memory:") as r,
+        caplog.at_level(logging.WARNING, "jev_claud"),
     ):
         r.decide(Image(PNG), {"x": noul("Está danificado?")})
         r.decide(Image(PNG), {"x": noul("Está danificado?")})
@@ -256,7 +256,7 @@ def test_temporary_image_survives_until_sent() -> None:
 
 
 def test_cli_ask_with_image_and_box_needs_jev(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from jev_claude.cli import main
+    from jev_claud.cli import main
 
     foto = tmp_path / "foto.png"
     foto.write_bytes(PNG)
@@ -268,7 +268,7 @@ def test_cli_ask_with_image_and_box_needs_jev(tmp_path: Path, capsys: pytest.Cap
 
 
 def test_cli_spend_and_doctor_show_routing(capsys: pytest.CaptureFixture[str]) -> None:
-    from jev_claude.cli import main
+    from jev_claud.cli import main
 
     assert (
         main(["ask", OBVIO, "--choice", "Setor?", "-o", "financeiro=fatura, reembolso", "-o", "suporte=erro"])
@@ -283,7 +283,7 @@ def test_cli_spend_and_doctor_show_routing(capsys: pytest.CaptureFixture[str]) -
 
 
 def test_mcp_decide_with_images_and_box(tmp_path: Path, make_jev: Factory) -> None:
-    from jev_claude.mcp import Server
+    from jev_claud.mcp import Server
 
     foto = tmp_path / "foto.png"
     foto.write_bytes(PNG)

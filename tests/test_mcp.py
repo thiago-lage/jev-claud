@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from jev_claude import CallableWriter, JevClaude
-from jev_claude.mcp import CHUNK_CHARS, MAX_ITEMS, TOOLS, Server, serve
+from jev_claud import CallableWriter, JevClaud
+from jev_claud.mcp import CHUNK_CHARS, MAX_ITEMS, TOOLS, Server, serve
 
 
 class Recorder:
@@ -29,7 +29,7 @@ def llm() -> Recorder:
 
 @pytest.fixture
 def server(llm: Recorder) -> Server:
-    srv = Server(lambda: JevClaude(store=":memory:", writer=CallableWriter(llm)))
+    srv = Server(lambda: JevClaud(store=":memory:", writer=CallableWriter(llm)))
     yield srv  # type: ignore[misc]
     srv.close()
 
@@ -67,7 +67,7 @@ def test_initialize_echoes_protocol_and_explains_token_savings(server: Server) -
     result = response["result"]
     assert result["protocolVersion"] == "2025-11-25"
     assert result["capabilities"] == {"tools": {"listChanged": False}}
-    assert result["serverInfo"]["name"] == "jev-claude"
+    assert result["serverInfo"]["name"] == "jev-claud"
     assert "economizar tokens" in result["instructions"]
 
 
@@ -244,7 +244,7 @@ def test_serve_loop_over_bytes(llm: Recorder) -> None:
     ]
     raw = b"\n".join(json.dumps(m, ensure_ascii=False).encode("utf-8") for m in messages) + b"\n\n{quebrado\n"
     out = io.BytesIO()
-    server = Server(lambda: JevClaude(store=":memory:", writer=CallableWriter(llm)))
+    server = Server(lambda: JevClaud(store=":memory:", writer=CallableWriter(llm)))
     assert serve(io.BytesIO(raw), out, server) == 0
     responses = [json.loads(line) for line in out.getvalue().decode("utf-8").splitlines()]
     assert [r.get("id") for r in responses] == [1, 2, None]

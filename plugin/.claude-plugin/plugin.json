@@ -1,14 +1,14 @@
 {
-  "name": "jev",
-  "displayName": "Jev Claude",
-  "version": "0.6.2",
+  "name": "jevin",
+  "displayName": "Jevin",
+  "version": "0.7.0",
   "description": "Poupa contexto e custo no Claude Code: saídas longas de testes e builds chegam compactadas, ferramentas MCP processam arquivos grandes fora do contexto, um subagente explora o código e devolve só a conclusão, e uma skill ensina quando usar decisões tipadas (TypeSafe Jev) ou texto (LLM).",
   "author": {
     "name": "Thiago Lage",
     "url": "https://github.com/thiago-lage"
   },
-  "homepage": "https://github.com/thiago-lage/jev-claude#readme",
-  "repository": "https://github.com/thiago-lage/jev-claude",
+  "homepage": "https://github.com/thiago-lage/jev-claud#readme",
+  "repository": "https://github.com/thiago-lage/jev-claud",
   "license": "MIT",
   "keywords": [
     "typesafe",
@@ -19,7 +19,7 @@
     "mcp"
   ],
   "icon": "./icon.png",
-  "documentationUrl": "https://github.com/thiago-lage/jev-claude#plugin-do-claude-code",
-  "supportUrl": "https://github.com/thiago-lage/jev-claude/issues",
-  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claude#o-que-o-plugin-roda-e-envia"
+  "documentationUrl": "https://github.com/thiago-lage/jev-claud#plugin-do-claude-code-jevin",
+  "supportUrl": "https://github.com/thiago-lage/jev-claud/issues",
+  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud#o-que-o-plugin-roda-e-envia"
 }

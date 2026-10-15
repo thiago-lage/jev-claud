@@ -1,15 +1,15 @@
-# jev-claude
+# jev-claud
 
-[![PyPI](https://img.shields.io/pypi/v/jev-claude)](https://pypi.org/project/jev-claude/)
-[![CI](https://github.com/thiago-lage/jev-claude/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claude/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/jev-claud)](https://pypi.org/project/jev-claud/)
+[![CI](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml)
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claude/main/docs/terminal.png" alt="Terminal do jev-claude: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/terminal.png" alt="Terminal do jev-claud: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
 </p>
 
-`jev-claude` separa as duas saídas de IA que um app tem:
+`jev-claud` separa as duas saídas de IA que um app tem:
 
 | Quem consome a resposta? | Use | Motor | Por quê |
 | --- | --- | --- | --- |
@@ -20,9 +20,9 @@ Regras conhecidas, cálculos e buscas exatas continuam em código puro: a IA ent
 falta senso comum semântico.
 
 ```python
-from jev_claude import JevClaude, Case, choice, noul, score
+from jev_claud import JevClaud, Case, choice, noul, score
 
-r = JevClaude()
+r = JevClaud()
 
 d = r.decide(
     ticket_text,
@@ -73,20 +73,20 @@ Uma linha instala tudo num ambiente isolado (sem mexer no seu Python) e abre o a
 **Windows** (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.ps1 | iex
 ```
 
 **macOS / Linux**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.sh | bash
 ```
 
-O assistente `jev-claude setup` funciona como o primeiro `claude` no terminal: mostra o que
+O assistente `jev-claud setup` funciona como o primeiro `claude` no terminal: mostra o que
 falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claude/main/docs/setup.png" alt="jev-claude setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/setup.png" alt="jev-claud setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
 </p>
 
 | Passo | O que faz |
@@ -95,27 +95,27 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Chave do Jev | Opcional. Guarda a chave e o orçamento mensal em `config.json` (padrão US$ 0). |
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
-| Servidor MCP | Registra o `jev-claude` no Claude Code para delegar lotes e economizar tokens. |
-| Plugin | Instala o plugin `jev@jev-claude`: saídas de teste compactadas, skill e subagente. |
+| Servidor MCP | Registra o `jev-claud` no Claude Code para delegar lotes e economizar tokens. |
+| Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): saídas de teste compactadas, skill e subagente. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
-jev-claude setup            # interativo (também abre sozinho no primeiro `jev-claude`)
-jev-claude setup --yes      # aceita tudo que não exige digitar nada
-jev-claude setup --check    # só verifica; sai com 1 se faltar algo essencial
-jev-claude setup --model qwen2.5:3b   # outro modelo do Ollama
+jev-claud setup            # interativo (também abre sozinho no primeiro `jev-claud`)
+jev-claud setup --yes      # aceita tudo que não exige digitar nada
+jev-claud setup --check    # só verifica; sai com 1 se faltar algo essencial
+jev-claud setup --model qwen2.5:3b   # outro modelo do Ollama
 ```
 
 ### Instalação pelo PyPI
 
 ```bash
-pip install "jev-claude[jev]"    # com o SDK do Jev
-pip install jev-claude           # só o núcleo: nenhuma dependência, modo offline grátis
-jev-claude setup                 # opcional: Ollama, Claude Code, plugin e regra global
+pip install "jev-claud[jev]"    # com o SDK do Jev
+pip install jev-claud           # só o núcleo: nenhuma dependência, modo offline grátis
+jev-claud setup                 # opcional: Ollama, Claude Code, plugin e regra global
 ```
 
 Versão em desenvolvimento, direto do GitHub:
-`pip install "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"`.
+`pip install "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"`.
 
 Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline. Prefira
 um ambiente virtual: o `typesafe-sdk` exige versões recentes de `anyio`/`h11`, que podem
@@ -125,10 +125,10 @@ Exemplo completo, que roda sem configurar nada: [`examples/triagem_suporte.py`](
 
 ## Dentro do Claude: servidor MCP para economizar tokens
 
-O `jev-claude setup` registra o jev-claude como servidor MCP do Claude Code (ou faça à mão):
+O `jev-claud setup` registra o jev-claud como servidor MCP do Claude Code (ou faça à mão):
 
 ```bash
-claude mcp add -s user jev-claude -- python -m jev_claude mcp
+claude mcp add -s user jev-claud -- python -m jev_claud mcp
 ```
 
 Nas próximas sessões o Claude ganha estas ferramentas, que rodam **fora do contexto dele**:
@@ -152,39 +152,41 @@ ferramentas também custam tokens; o Claude responde direto. E o `llama3.2` (3B)
 capaz que o Claude: use para rascunhos e resumos, e deixe o Claude revisar o que importa. A
 regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
-## Plugin do Claude Code
+## Plugin do Claude Code: Jevin
 
 O plugin junta tudo que poupa contexto **sem mudar a qualidade da entrega**: o Claude continua
-implementando direto (edita arquivos, roda testes); o jev-claude só tira o ruído do caminho.
+implementando direto (edita arquivos, roda testes); o jev-claud só tira o ruído do caminho.
 
 ```text
-/plugin marketplace add thiago-lage/jev-claude
-/plugin install jev@jev-claude
+/plugin marketplace add thiago-lage/jev-claud
+/plugin install jevin@jev-claud
 ```
 
-(o `jev-claude setup` faz isso por você). O hook usa o comando `jev-claude`
-(`pip install jev-claude`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
-Até a 0.6.0 o plugin se chamava `jev-claude`; o marketplace migra quem já tinha instalado.
+(o `jev-claud setup` faz isso por você). O hook usa o comando `jev-claud`
+(`pip install jev-claud`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
+O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava `jev-claude`: quem
+vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca marketplace, plugin e MCP
+antigos pelos novos (o comando `jev-claude` continua funcionando como atalho).
 
 | Onde | O que carrega |
 | --- | --- |
 | Claude Code | Tudo: hook, skill e subagente |
-| Cowork | Hook, skill e subagente (o hook precisa do `jev-claude` no computador) |
+| Cowork | Hook, skill e subagente (o hook precisa do `jev-claud` no computador) |
 | claude.ai (chat) | Só a skill |
 
 | Peça | O que faz | Custo |
 | --- | --- | --- |
-| Hook `PreToolUse` | Testes, builds e linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) rodam via `jev-claude run`: saídas acima de ~80 linhas chegam com o começo, o fim e as linhas de erro com contexto. A saída completa fica num arquivo citado no rodapé. O código de saída é o do comando original | zero (sem LLM) |
+| Hook `PreToolUse` | Testes, builds e linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) rodam via `jev-claud run`: saídas acima de ~80 linhas chegam com o começo, o fim e as linhas de erro com contexto. A saída completa fica num arquivo citado no rodapé. O código de saída é o do comando original | zero (sem LLM) |
 | Skill `jev` | Ensina quando usar Jev, LLM ou código puro, e quando as ferramentas MCP compensam. Só entra no contexto quando é relevante | — |
 | Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
 
 Detalhes do hook:
 
 - **Não aprova nada sozinho**: o comando reescrito passa pelas mesmas permissões. Na primeira
-  vez o Claude Code pergunta; escolha "não perguntar de novo" para o `... -m jev_claude run`.
+  vez o Claude Code pergunta; escolha "não perguntar de novo" para o `... -m jev_claud run`.
 - **Conservador**: só mexe em comandos simples; com `|`, `>`, `&&`, `;`, `$(...)` ou em segundo
-  plano, nada muda. O `jev-claude run` recusa qualquer comando que não seja teste/build/lint.
-- **Desligar**: `JEV_CLAUDE_COMPACT=0` (no ambiente ou na frente de um comando).
+  plano, nada muda. O `jev-claud run` recusa qualquer comando que não seja teste/build/lint.
+- **Desligar**: `JEV_CLAUD_COMPACT=0` (no ambiente ou na frente de um comando).
 - Teste real (este repositório, `pytest -v`): 174 linhas viraram 64, com o resumo final intacto.
 
 O servidor MCP continua registrado pelo `setup` (com o caminho absoluto do Python, que funciona
@@ -194,14 +196,14 @@ em todos os sistemas), e a regra global agora diz explicitamente para implementa
 
 Transparência total sobre o que acontece na sua máquina:
 
-- **Roda:** o hook executa `plugin/hooks/pre-bash.sh`, que chama `jev-claude hook pre-bash` só quando o
+- **Roda:** o hook executa `plugin/hooks/pre-bash.sh`, que chama `jev-claud hook pre-bash` só quando o
   Claude Code vai rodar um comando no Bash. Se for um teste/build/lint simples, o comando é
-  reescrito para `python -m jev_claude run -- <o mesmo comando>`, que o executa, compacta a saída
+  reescrito para `python -m jev_claud run -- <o mesmo comando>`, que o executa, compacta a saída
   e devolve o mesmo código de saída. Nenhum outro comando é alterado.
-- **Grava (só localmente, na pasta de dados do jev-claude):** a saída completa de cada comando
+- **Grava (só localmente, na pasta de dados do jev-claud):** a saída completa de cada comando
   compactado (`logs/`, as 20 mais recentes) e contadores de economia por mês num SQLite. Nada sai
   da sua máquina.
-- **Envia:** o plugin em si não acessa a rede. A biblioteca `jev-claude` só envia texto para a
+- **Envia:** o plugin em si não acessa a rede. A biblioteca `jev-claud` só envia texto para a
   API da TypeSafe (Jev) se você configurar uma chave e um orçamento, e só para o Ollama local
   quando usa a LLM de texto.
 - **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
@@ -209,21 +211,21 @@ Transparência total sobre o que acontece na sua máquina:
 
 ## Configuração (tudo opcional)
 
-O `jev-claude setup` grava `config.json` em `JEV_CLAUDE_HOME`. Variáveis de ambiente sempre
+O `jev-claud setup` grava `config.json` em `JEV_CLAUD_HOME`. Variáveis de ambiente sempre
 têm prioridade sobre o arquivo.
 
 | Variável | Padrão | Efeito |
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | — | Chave do Jev ([console](https://console.typesafe.ai/keys)). |
-| `JEV_CLAUDE_BUDGET_USD` | `0` | Teto mensal para o Jev. `0` = custo zero (offline). Ex.: `1.00` ≈ 23 milhões de tokens de entrada. |
-| `JEV_CLAUDE_MODEL` | `latest` | `latest` (estável, atualizado pela TypeSafe), `preview` (mais novo), `newest` (descobre e fixa a versão mais nova por 24 h) ou `jev-X.Y.Z` (fixo). |
-| `JEV_CLAUDE_USD_PER_MTOK` | `0.042` | Preço por milhão de tokens de entrada, caso mude. |
-| `JEV_CLAUDE_STRATEGY` | `cascade` | `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev). |
-| `JEV_CLAUDE_CASCADE_ACCEPT` | `0.8` | Confiança mínima para aceitar a resposta offline. Suba para escalar mais ao Jev. |
-| `JEV_CLAUDE_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
-| `JEV_CLAUDE_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
-| `JEV_CLAUDE_LLM_BASE_URL` / `JEV_CLAUDE_LLM_MODEL` / `JEV_CLAUDE_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
-| `JEV_CLAUDE_OLLAMA_MODEL` / `OLLAMA_HOST` | `llama3.2` / `localhost:11434` | Ollama local, detectado automaticamente. |
+| `JEV_CLAUD_BUDGET_USD` | `0` | Teto mensal para o Jev. `0` = custo zero (offline). Ex.: `1.00` ≈ 23 milhões de tokens de entrada. |
+| `JEV_CLAUD_MODEL` | `latest` | `latest` (estável, atualizado pela TypeSafe), `preview` (mais novo), `newest` (descobre e fixa a versão mais nova por 24 h) ou `jev-X.Y.Z` (fixo). |
+| `JEV_CLAUD_USD_PER_MTOK` | `0.042` | Preço por milhão de tokens de entrada, caso mude. |
+| `JEV_CLAUD_STRATEGY` | `cascade` | `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev). |
+| `JEV_CLAUD_CASCADE_ACCEPT` | `0.8` | Confiança mínima para aceitar a resposta offline. Suba para escalar mais ao Jev. |
+| `JEV_CLAUD_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
+| `JEV_CLAUD_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
+| `JEV_CLAUD_LLM_BASE_URL` / `JEV_CLAUD_LLM_MODEL` / `JEV_CLAUD_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
+| `JEV_CLAUD_OLLAMA_MODEL` / `OLLAMA_HOST` | `llama3.2` / `localhost:11434` | Ollama local, detectado automaticamente. |
 
 ## API
 
@@ -282,7 +284,7 @@ Com a chave e o orçamento do Jev configurados, `decide` (e `when`, `switch`, `r
 
 ```
 1. cache local        mesma pergunta + mesmo estado + mesmo modelo  -> grátis
-2. offline            confiança >= JEV_CLAUDE_CASCADE_ACCEPT (0,8)  -> grátis
+2. offline            confiança >= JEV_CLAUD_CASCADE_ACCEPT (0,8)  -> grátis
 3. Jev (System One)   só as perguntas incertas, numa requisição     -> pago
 4. sua Policy         confiança baixa até no Jev -> Band.LOW -> humano/padrão
 ```
@@ -298,13 +300,13 @@ d["setor"].source  # de onde veio cada resposta
   Descreva cada opção com as palavras que aparecem nos dados reais e mais coisas saem grátis.
 - `rank` nunca mistura notas offline e do Jev (não são comparáveis): ou tudo offline, ou tudo no Jev.
 - Imagens e `box` vão sempre ao Jev (o offline não enxerga imagens).
-- `JEV_CLAUDE_STRATEGY=jev` (ou `JevClaude(strategy="jev")`) manda tudo ao Jev, como antes.
-- `jev-claude spend` mostra quantas perguntas cada camada respondeu e a economia estimada.
+- `JEV_CLAUD_STRATEGY=jev` (ou `JevClaud(strategy="jev")`) manda tudo ao Jev, como antes.
+- `jev-claud spend` mostra quantas perguntas cada camada respondeu e a economia estimada.
 
 ### Imagens (System One com visão)
 
 ```python
-from jev_claude import Image, box, noul
+from jev_claud import Image, box, noul
 
 foto = Image("devolucao_123.jpg")  # caminho ou bytes (PNG/JPEG)
 d = r.decide(
@@ -320,9 +322,9 @@ if d["danificado"].yes and d["danificado"].confident:
 r.when(f"Comparando {foto} com {Image('original.jpg')}", "A peça foi trocada?")  # ...ou no texto
 ```
 
-Exigem o Jev com um modelo de visão (`JEV_CLAUDE_MODEL`). A imagem é enviada como anexo; o
+Exigem o Jev com um modelo de visão (`JEV_CLAUD_MODEL`). A imagem é enviada como anexo; o
 custo estimado é ~1.500 tokens por imagem. Pela CLI:
-`jev-claude ask --image foto.jpg --box "Onde está o dano?"`.
+`jev-claud ask --image foto.jpg --box "Onde está o dano?"`.
 
 ### Texto (uma pessoa lê)
 
@@ -334,9 +336,9 @@ LLMs suportadas: `OllamaWriter` (local, grátis), `OpenAICompatibleWriter(base_u
 api_key=...)` e `CallableWriter(fn)` para plugar qualquer SDK:
 
 ```python
-from jev_claude import CallableWriter, JevClaude
+from jev_claud import CallableWriter, JevClaud
 
-r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, system)))
+r = JevClaud(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, system)))
 ```
 
 ### Async
@@ -346,18 +348,18 @@ r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, sys
 ## CLI
 
 ```bash
-jev-claude setup                        # assistente: instala e configura tudo
-jev-claude mcp                          # servidor MCP (stdio) usado pelo Claude Code
-jev-claude run -- pytest -x            # roda teste/build e compacta a saída (sem LLM)
-npm test 2>&1 | jev-claude compact     # o mesmo, como filtro de texto
-jev-claude doctor                       # backends ativos, modelo, orçamento, cache
-jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
-jev-claude ask "Preciso disso hoje" --noul "É urgente?"
-jev-claude write "Explique o plano Pro em 2 frases"
-jev-claude models                       # modelos Jev disponíveis na conta
-jev-claude spend                        # gastos registrados por mês
-jev-claude update                       # atualiza jev-claude e typesafe-sdk, redescobre o modelo mais novo
-jev-claude cache clear
+jev-claud setup                        # assistente: instala e configura tudo
+jev-claud mcp                          # servidor MCP (stdio) usado pelo Claude Code
+jev-claud run -- pytest -x            # roda teste/build e compacta a saída (sem LLM)
+npm test 2>&1 | jev-claud compact     # o mesmo, como filtro de texto
+jev-claud doctor                       # backends ativos, modelo, orçamento, cache
+jev-claud ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
+jev-claud ask "Preciso disso hoje" --noul "É urgente?"
+jev-claud write "Explique o plano Pro em 2 frases"
+jev-claud models                       # modelos Jev disponíveis na conta
+jev-claud spend                        # gastos registrados por mês
+jev-claud update                       # atualiza jev-claud e typesafe-sdk, redescobre o modelo mais novo
+jev-claud cache clear
 ```
 
 ## Como desenhar boas perguntas

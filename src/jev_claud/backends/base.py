@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from jev_claude.decision import Kind
-from jev_claude.questions import Question
+from jev_claud.decision import Kind
+from jev_claud.questions import Question
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from jev_claude.compact import (
+from jev_claud.compact import (
     MIN_LINES,
     compact_text,
     pre_bash_hook,
@@ -60,7 +60,7 @@ def test_filter_saves_full_log_and_reports(tmp_path: Path) -> None:
     out = io.StringIO()
     run_filter(io.StringIO(noisy_output()), out, log_dir=tmp_path)
     text = out.getvalue()
-    assert "[jev-claude] saída compactada: 301 -> " in text
+    assert "[jev-claud] saída compactada: 301 -> " in text
     (log,) = tmp_path.glob("*.log")
     assert str(log) in text
     assert log.read_text(encoding="utf-8") == noisy_output()
@@ -104,7 +104,7 @@ def test_old_logs_are_pruned(tmp_path: Path) -> None:
 )
 def test_noisy_commands_are_wrapped(command: str) -> None:
     wrapped = wrap_command(command, python="/venv/bin/python")
-    assert wrapped == f"/venv/bin/python -m jev_claude run -- {command}"
+    assert wrapped == f"/venv/bin/python -m jev_claud run -- {command}"
 
 
 @pytest.mark.parametrize(
@@ -120,7 +120,7 @@ def test_noisy_commands_are_wrapped(command: str) -> None:
         "npm test; echo done",
         "pytest &",
         "pytest $(cat args)",
-        "npm test 2>&1 | jev-claude compact",
+        "npm test 2>&1 | jev-claud compact",
         "npm run dev",
         "",
         "pytest 'aspas sem fim",
@@ -132,7 +132,7 @@ def test_other_commands_are_left_alone(command: str) -> None:
 
 def test_windows_python_path_uses_forward_slashes() -> None:
     wrapped = wrap_command("pytest", python="C:\\Users\\Ana Lima\\venv\\Scripts\\python.exe")
-    assert wrapped is not None and wrapped.endswith(" -m jev_claude run -- pytest")
+    assert wrapped is not None and wrapped.endswith(" -m jev_claud run -- pytest")
     if sys.platform == "win32":
         assert wrapped.startswith("'C:/Users/Ana Lima/venv/Scripts/python.exe'")
 
@@ -153,13 +153,13 @@ def test_hook_rewrites_and_keeps_other_fields_without_approving() -> None:
     assert "permissionDecision" not in output  # a permissão continua com o usuário
     updated = output["updatedInput"]
     assert updated["description"] == "Roda os testes" and updated["timeout"] == 120000
-    assert updated["command"].endswith(" -m jev_claude run -- pytest -q")
+    assert updated["command"].endswith(" -m jev_claud run -- pytest -q")
 
 
 @pytest.mark.parametrize(
     ("payload", "env"),
     [
-        (event("pytest"), {"JEV_CLAUDE_COMPACT": "0"}),
+        (event("pytest"), {"JEV_CLAUD_COMPACT": "0"}),
         (event("pytest", run_in_background=True), {}),
         (event("git status"), {}),
         ({"tool_name": "Read", "tool_input": {"file_path": "x"}}, {}),
@@ -190,7 +190,7 @@ def test_run_reports_missing_program(monkeypatch: pytest.MonkeyPatch) -> None:
     def missing(*args: object, **kwargs: object) -> None:
         raise FileNotFoundError(2, "não encontrado")
 
-    monkeypatch.setattr("jev_claude.compact.subprocess.run", missing)
+    monkeypatch.setattr("jev_claud.compact.subprocess.run", missing)
     out = io.StringIO()
     assert run_command(["dotnet", "test"], out, env={"PATH": ""}) == 127
     assert "não foi possível executar dotnet" in out.getvalue()
@@ -207,13 +207,13 @@ def test_run_keeps_exit_code_env_and_compacts(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     path = os.pathsep.join([str(Path(sys.executable).parent), os.environ.get("PATH", "")])
-    env = {**os.environ, "PATH": path, "JEV_CLAUDE_HOME": str(tmp_path / "home")}
+    env = {**os.environ, "PATH": path, "JEV_CLAUD_HOME": str(tmp_path / "home")}
     shutil_python = "python" if sys.platform == "win32" else Path(sys.executable).name
     done = subprocess.run(
         [
             sys.executable,
             "-m",
-            "jev_claude",
+            "jev_claud",
             "run",
             "--",
             "MODO=ci",
@@ -235,14 +235,14 @@ def test_run_keeps_exit_code_env_and_compacts(tmp_path: Path) -> None:
     assert done.returncode == 1, done.stdout
     assert "quebrou no 150" in done.stdout
     assert "1 failed, 299 passed" in done.stdout
-    assert "[jev-claude] saída compactada:" in done.stdout
+    assert "[jev-claud] saída compactada:" in done.stdout
     assert len(done.stdout.splitlines()) < 150
 
 
 def test_cli_hook_end_to_end(tmp_path: Path) -> None:
-    env = {**os.environ, "JEV_CLAUDE_HOME": str(tmp_path)}
+    env = {**os.environ, "JEV_CLAUD_HOME": str(tmp_path)}
     hook = subprocess.run(
-        [sys.executable, "-m", "jev_claude", "hook", "pre-bash"],
+        [sys.executable, "-m", "jev_claud", "hook", "pre-bash"],
         input=json.dumps(event("npm test")),
         capture_output=True,
         text=True,
@@ -251,9 +251,9 @@ def test_cli_hook_end_to_end(tmp_path: Path) -> None:
         check=True,
     )
     updated = json.loads(hook.stdout)["hookSpecificOutput"]["updatedInput"]
-    assert updated["command"].endswith(" -m jev_claude run -- npm test")
+    assert updated["command"].endswith(" -m jev_claud run -- npm test")
     compact = subprocess.run(
-        [sys.executable, "-m", "jev_claude", "compact"],
+        [sys.executable, "-m", "jev_claud", "compact"],
         input=noisy_output(),
         capture_output=True,
         text=True,
@@ -261,4 +261,4 @@ def test_cli_hook_end_to_end(tmp_path: Path) -> None:
         env=env,
         check=True,
     )
-    assert "[jev-claude] saída compactada: 301 ->" in compact.stdout
+    assert "[jev-claud] saída compactada: 301 ->" in compact.stdout

@@ -1,4 +1,4 @@
-"""`jev-claude setup`: assistente no terminal que deixa o fluxo pronto sozinho.
+"""`jev-claud setup`: assistente no terminal que deixa o fluxo pronto sozinho.
 
 Detecta o que falta, explica para que serve e pergunta antes de instalar cada peça:
 
@@ -7,8 +7,8 @@ Detecta o que falta, explica para que serve e pergunta antes de instalar cada pe
 3. Ollama + servidor + modelo         texto grátis na sua máquina
 4. Chave e orçamento do Jev           opcional; guardados em `config.json`
 5. Claude Code + skill TypeSafe       o agente que usa tudo isso
-6. Servidor MCP `jev-claude`          o Claude delega lotes ao Jev/Ollama e economiza tokens
-7. Plugin `jev-claude` no Claude Code  saídas compactadas, skill e subagente explorador
+6. Servidor MCP `jev-claud`          o Claude delega lotes ao Jev/Ollama e economiza tokens
+7. Plugin `jev-claud` no Claude Code  saídas compactadas, skill e subagente explorador
 8. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
 
 Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e `--check`
@@ -32,37 +32,42 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, TextIO
 
-from jev_claude import mascot
-from jev_claude.config import config_path, load_config, save_config
-from jev_claude.writers import DEFAULT_OLLAMA_MODEL, ollama_host
+from jev_claud import mascot
+from jev_claud.config import config_path, load_config, save_config
+from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
-REPO_URL = "https://github.com/thiago-lage/jev-claude"
-PACKAGE_SPEC = f"jev-claude[jev] @ git+{REPO_URL}"
+REPO_URL = "https://github.com/thiago-lage/jev-claud"
+PACKAGE_SPEC = f"jev-claud[jev] @ git+{REPO_URL}"
 TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
-PLUGIN_REPO = "thiago-lage/jev-claude"
-PLUGIN_MARKETPLACE = "jev-claude"
-PLUGIN_ID = f"jev@{PLUGIN_MARKETPLACE}"
-OLD_PLUGIN_ID = f"jev-claude@{PLUGIN_MARKETPLACE}"  # nome até a 0.6.0
-RULE_START = "<!-- jev-claude:start -->"
-RULE_END = "<!-- jev-claude:end -->"
+PLUGIN_REPO = "thiago-lage/jev-claud"
+PLUGIN_MARKETPLACE = "jev-claud"
+PLUGIN_ID = f"jevin@{PLUGIN_MARKETPLACE}"
+MCP_NAME = "jev-claud"
+RULE_START = "<!-- jev-claud:start -->"
+RULE_END = "<!-- jev-claud:end -->"
+# Nomes até a 0.6 (o projeto se chamava jev-claude): o setup migra cada um deles.
+OLD_MARKETPLACE = "jev-claude"
+OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
+OLD_MCP_NAME = "jev-claude"
+OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
 RULE_VERSION = 2
 CLAUDE_RULE = f"""{RULE_START}
-<!-- versão {RULE_VERSION}: o `jev-claude setup` substitui este bloco inteiro ao atualizar -->
+<!-- versão {RULE_VERSION}: o `jev-claud setup` substitui este bloco inteiro ao atualizar -->
 ## Como trabalhar
 
 - Pedido de mudança em código: **implemente direto**. Edite os arquivos, rode os testes e
   mostre o resultado. Não devolva o código no chat para a pessoa colar, a não ser que ela peça.
 - Nunca delegue escrita ou edição de código ao Ollama/Jev: a qualidade da entrega é sua.
-  As ferramentas `jev-claude` só servem para poupar contexto (ver abaixo).
+  As ferramentas `jev-claud` só servem para poupar contexto (ver abaixo).
 
 ## Quando o código que você escreve usa IA: Jev vs. LLM
 
 - Saída de IA que o **código consome para ramificar** (if/switch, roteamento, filtros, ranking,
-  validação): use **TypeSafe Jev** (`choice`, `noul`, `score`) via `jev-claude`
-  (`from jev_claude import JevClaude`). Não peça JSON a uma LLM para depois fazer parse.
-- Saída que **uma pessoa vai ler**: use **LLM** (`JevClaude.write`, Ollama local por padrão).
+  validação): use **TypeSafe Jev** (`choice`, `noul`, `score`) via `jev-claud`
+  (`from jev_claud import JevClaud`). Não peça JSON a uma LLM para depois fazer parse.
+- Saída que **uma pessoa vai ler**: use **LLM** (`JevClaud.write`, Ollama local por padrão).
 - Regras conhecidas, cálculos e buscas exatas ficam em código puro.
-- Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claude setup`).
+- Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claud setup`).
 - Leia https://docs.typesafe.ai/llms.txt e use a skill `typesafe:typesafe-ai` ao integrar.
 
 ## Poupar contexto
@@ -174,7 +179,7 @@ class UI:
         print(text, file=self.out, flush=True)
 
     def banner(
-        self, version: str, *, title: str = "Bem-vindo ao jev-claude setup!", footer: str | None = None
+        self, version: str, *, title: str = "Bem-vindo ao jev-claud setup!", footer: str | None = None
     ) -> None:
         """Caixa de boas-vindas com o mascote à esquerda; `footer` sai em cinza logo abaixo."""
         s = self.sym
@@ -362,7 +367,7 @@ class Setup:
         if mode == "check" or step.fix is None:
             return False
         if mode == "yes" and not step.auto:
-            self.ui.note("pulado no modo --yes (precisa de você): rode `jev-claude setup`.")
+            self.ui.note("pulado no modo --yes (precisa de você): rode `jev-claud setup`.")
             return False
         if mode == "interactive" and not self.ui.confirm(step.question, step.default_yes):
             self.ui.note("pulado.")
@@ -380,15 +385,15 @@ class Setup:
             self.ui.line(self.ui.paint(f" {self.ui.sym['star']} Tudo pronto!", "1;32"))
             self.ui.note("Experimente:")
             self.ui.note(
-                '  jev-claude ask "Fui cobrado duas vezes" --choice "Setor?" -o financeiro -o suporte'
+                '  jev-claud ask "Fui cobrado duas vezes" --choice "Setor?" -o financeiro -o suporte'
             )
-            self.ui.note('  jev-claude write "Diga olá ao cliente em uma frase"')
+            self.ui.note('  jev-claud write "Diga olá ao cliente em uma frase"')
             if self.sys.which("claude") or self.sys.exists(self._claude_path()):
                 self.ui.note("  claude      (abra o Claude Code em qualquer projeto)")
         else:
             missing = ", ".join(report.essential_missing)
             self.ui.line(self.ui.paint(f" Ainda falta: {missing}", "33"))
-            hint = "jev-claude setup" if mode == "check" else "jev-claude setup  (quando quiser)"
+            hint = "jev-claud setup" if mode == "check" else "jev-claud setup  (quando quiser)"
             self.ui.note(f"Rode de novo: {hint}")
         self.ui.note(f"Configuração: {config_path()}")
 
@@ -470,13 +475,13 @@ class Setup:
                 "Servidor MCP no Claude Code (economiza tokens)",
                 self._check_mcp,
                 self._install_mcp,
-                "Registrar o jev-claude como servidor MCP do Claude Code?",
+                "Registrar o jev-claud como servidor MCP do Claude Code?",
                 requires=("claude",),
                 essential=False,
             ),
             Step(
                 "plugin",
-                "Plugin jev-claude no Claude Code",
+                "Plugin jev-claud no Claude Code",
                 self._check_plugin,
                 self._install_plugin,
                 "Instalar o plugin (saídas de teste compactadas, skill e subagente explorador)?",
@@ -598,7 +603,7 @@ class Setup:
     def _check_key(self) -> tuple[bool, str]:
         config = load_config()
         if self.sys.env.get("TYPESAFE_API_KEY") or config.get("typesafe_api_key"):
-            raw = str(self.sys.env.get("JEV_CLAUDE_BUDGET_USD") or config.get("budget_usd") or 0)
+            raw = str(self.sys.env.get("JEV_CLAUD_BUDGET_USD") or config.get("budget_usd") or 0)
             try:
                 budget = float(raw.replace(",", "."))
             except ValueError:
@@ -679,31 +684,32 @@ class Setup:
         path = self._claude()
         if not path:
             return False, "precisa do Claude Code"
-        code, _ = self.sys.capture([path, "mcp", "get", "jev-claude"])
-        return (
-            (True, "ferramentas decide, classify, rank, summarize_file, write")
-            if code == 0
-            else (
-                False,
-                "o Claude ainda não consegue delegar trabalho ao Jev e ao Ollama",
-            )
-        )
+        code, _ = self.sys.capture([path, "mcp", "get", MCP_NAME])
+        if code == 0:
+            return True, "ferramentas decide, classify, rank, summarize_file, write"
+        old, _ = self.sys.capture([path, "mcp", "get", OLD_MCP_NAME])
+        if old == 0:
+            return False, f"registrado com o nome antigo ({OLD_MCP_NAME})"
+        return False, "o Claude ainda não consegue delegar trabalho ao Jev e ao Ollama"
 
     def _install_mcp(self) -> bool:
         path = self._claude()
         if not path:
             return False
+        old, _ = self.sys.capture([path, "mcp", "get", OLD_MCP_NAME])
+        if old == 0:
+            self.sys.run([path, "mcp", "remove", "-s", "user", OLD_MCP_NAME])
         command = [
             path,
             "mcp",
             "add",
             "-s",
             "user",
-            "jev-claude",
+            MCP_NAME,
             "--",
             self.sys.python,
             "-m",
-            "jev_claude",
+            "jev_claud",
             "mcp",
         ]
         ok = self.sys.run(command) == 0
@@ -711,8 +717,8 @@ class Setup:
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
         return ok
 
-    def _bash_shim(self) -> Path:
-        return self.sys.home / ".local" / "bin" / "jev-claude"
+    def _bash_shim(self, name: str = "jev-claud") -> Path:
+        return self.sys.home / ".local" / "bin" / name
 
     def _check_plugin(self) -> tuple[bool, str]:
         path = self._claude()
@@ -720,11 +726,12 @@ class Setup:
             return False, "precisa do Claude Code"
         code, output = self.sys.capture([path, "plugin", "list"])
         if code != 0 or not _listed(output, PLUGIN_ID):
-            if _listed(output, OLD_PLUGIN_ID):
-                return False, "nome antigo (jev-claude): atualizar para jev"
+            old = next((name for name in OLD_PLUGIN_IDS if _listed(output, name)), None)
+            if old is not None:
+                return False, f"nome antigo ({old}): atualizar para {PLUGIN_ID}"
             return False, "não instalado"
         if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
-            return False, "falta o atalho do jev-claude para o Git Bash"
+            return False, "falta o atalho do jev-claud para o Git Bash"
         return True, PLUGIN_ID
 
     def _install_plugin(self) -> bool:
@@ -734,26 +741,32 @@ class Setup:
         if self.sys.platform == "win32":
             self._write_bash_shim()
         _, output = self.sys.capture([path, "plugin", "list"])
+        _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
         if not _listed(output, PLUGIN_ID):
-            _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
             if _listed(marketplaces, PLUGIN_MARKETPLACE):
-                # Catálogo novo: o plugin passou a se chamar `jev` na 0.6.1.
                 self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
             elif self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
                 return False
             if self.sys.run([path, "plugin", "install", PLUGIN_ID]) != 0:
                 return False
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
-        if _listed(output, OLD_PLUGIN_ID):
-            self.sys.run([path, "plugin", "uninstall", OLD_PLUGIN_ID])
+        for old in OLD_PLUGIN_IDS:
+            if _listed(output, old):
+                self.sys.run([path, "plugin", "uninstall", old])
+        if _listed(marketplaces, OLD_MARKETPLACE):
+            self.sys.run([path, "plugin", "marketplace", "remove", OLD_MARKETPLACE])
         return True
 
     def _write_bash_shim(self) -> None:
-        """No Windows, o Claude Code roda comandos no Git Bash, que não acha `jev-claude.cmd`."""
-        shim = self._bash_shim()
+        """No Windows, o Claude Code roda comandos no Git Bash, que não acha arquivos `.cmd`.
+
+        Cria `jev-claud` e o nome antigo `jev-claude`, os dois apontando para este Python.
+        """
         python = Path(self.sys.python).as_posix()
-        shim.parent.mkdir(parents=True, exist_ok=True)
-        shim.write_bytes(f'#!/bin/sh\nexec "{python}" -m jev_claude "$@"\n'.encode())
+        for name in ("jev-claud", "jev-claude"):
+            shim = self._bash_shim(name)
+            shim.parent.mkdir(parents=True, exist_ok=True)
+            shim.write_bytes(f'#!/bin/sh\nexec "{python}" -m jev_claud "$@"\n'.encode())
 
     # -- regra global ------------------------------------------------------------------
 
@@ -762,7 +775,7 @@ class Setup:
             text = self.claude_md.read_text(encoding="utf-8")
             if CLAUDE_RULE.strip() in text:
                 return True, str(self.claude_md)
-            if RULE_START in text:
+            if RULE_START in text or OLD_RULE_MARKERS[0] in text:
                 return False, "versão antiga (não pede para implementar direto)"
         return False, "Claude não sabe quando usar Jev ou LLM"
 
@@ -770,10 +783,13 @@ class Setup:
         """Acrescenta a regra ou troca o bloco antigo entre os marcadores, preservando o resto."""
         self.claude_md.parent.mkdir(parents=True, exist_ok=True)
         current = self.claude_md.read_text(encoding="utf-8") if self.claude_md.exists() else ""
-        start = current.find(RULE_START)
-        end = current.find(RULE_END, start)
+        for start_marker, end_marker in ((RULE_START, RULE_END), OLD_RULE_MARKERS):
+            start = current.find(start_marker)
+            end = current.find(end_marker, start)
+            if start != -1 and end != -1:
+                break
         if start != -1 and end != -1:
-            tail = current[end + len(RULE_END) :].removeprefix("\n")
+            tail = current[end + len(end_marker) :].removeprefix("\n")
             self.claude_md.write_text(current[:start] + CLAUDE_RULE + tail, encoding="utf-8")
             return True
         separator = "\n" if current and not current.endswith("\n") else ""
@@ -784,8 +800,8 @@ class Setup:
 
 def savings_footer() -> str | None:
     """Linha de economia do mês para o rodapé do banner; None se não der para ler o banco."""
-    from jev_claude.savings import summary
-    from jev_claude.store import Store
+    from jev_claud.savings import summary
+    from jev_claud.store import Store
 
     try:
         store = Store()

@@ -1,7 +1,7 @@
 import pytest
 
-from jev_claude import Band, Decision, Policy
-from jev_claude.decision import choice_confidence, noul_confidence, score_confidence
+from jev_claud import Band, Decision, Policy
+from jev_claud.decision import choice_confidence, noul_confidence, score_confidence
 
 
 def test_choice_confidence_matches_docs_formula() -> None:

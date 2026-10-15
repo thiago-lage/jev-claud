@@ -4,13 +4,13 @@ Rode sem configurar nada (modo offline, custo zero):
 
     python examples/triagem_suporte.py
 
-Com Jev (pago, com teto):  TYPESAFE_API_KEY=... JEV_CLAUDE_BUDGET_USD=1 python examples/triagem_suporte.py
+Com Jev (pago, com teto):  TYPESAFE_API_KEY=... JEV_CLAUD_BUDGET_USD=1 python examples/triagem_suporte.py
 Com texto via Ollama local: instale https://ollama.com e rode `ollama pull llama3.2`.
 """
 
 from __future__ import annotations
 
-from jev_claude import Band, JevClaude, NoWriterError, Policy, choice, noul, score
+from jev_claud import Band, JevClaud, NoWriterError, Policy, choice, noul, score
 
 TICKETS = [
     "Fui cobrado duas vezes na fatura deste mês. Quero o reembolso hoje!",
@@ -41,7 +41,7 @@ QUESTIONS = {
 }
 
 
-def rotear(r: JevClaude, ticket: str) -> str:
+def rotear(r: JevClaud, ticket: str) -> str:
     # Uma requisição, três decisões independentes avaliadas em paralelo.
     d = r.decide(ticket, QUESTIONS)
     setor, urgente = d["setor"], d["urgente"]
@@ -65,7 +65,7 @@ def rotear(r: JevClaude, ticket: str) -> str:
 
 
 def main() -> None:
-    with JevClaude(policy=Policy(act=0.7, confirm=0.4)) as r:
+    with JevClaud(policy=Policy(act=0.7, confirm=0.4)) as r:
         for ticket in TICKETS:
             destino = rotear(r, ticket)
             try:

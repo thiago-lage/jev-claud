@@ -6,10 +6,10 @@ completa fica salva em disco, e o rodapé diz onde, para o Claude abrir se preci
 
 Usos:
 
-- `comando 2>&1 | jev-claude compact`: filtro de texto.
-- `jev-claude run -- pytest -x`: roda, compacta e sai com o código do comando.
-- Hook `PreToolUse` do Claude Code (`jev-claude hook pre-bash`): reescreve só comandos
-  simples e ruidosos (testes, builds, linters) para `jev-claude run`. A permissão
+- `comando 2>&1 | jev-claud compact`: filtro de texto.
+- `jev-claud run -- pytest -x`: roda, compacta e sai com o código do comando.
+- Hook `PreToolUse` do Claude Code (`jev-claud hook pre-bash`): reescreve só comandos
+  simples e ruidosos (testes, builds, linters) para `jev-claud run`. A permissão
   continua sendo pedida normalmente: o hook não aprova nada.
 """
 
@@ -27,8 +27,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
-from jev_claude import savings
-from jev_claude.store import default_home
+from jev_claud import savings
+from jev_claud.envvars import getenv
+from jev_claud.store import default_home
 
 MIN_LINES = 80
 HEAD_LINES = 5
@@ -76,7 +77,7 @@ def logs_dir() -> Path:
 
 
 def enabled(env: Mapping[str, str] | None = None) -> bool:
-    value = (env if env is not None else os.environ).get("JEV_CLAUDE_COMPACT", "1")
+    value = getenv("JEV_CLAUD_COMPACT", "1", env)
     return value.strip().lower() not in OFF_VALUES
 
 
@@ -136,7 +137,7 @@ def write_compacted(text: str, stdout: TextIO, *, log_dir: Path | None = None) -
     savings.record(savings.COMPACT, len(text) - len(compacted))
     before, after = len(text.splitlines()), len(compacted.splitlines())
     where = f"; completa em {path}" if path else ""
-    stdout.write(f"{compacted}\n[jev-claude] saída compactada: {before} -> {after} linhas{where}\n")
+    stdout.write(f"{compacted}\n[jev-claud] saída compactada: {before} -> {after} linhas{where}\n")
 
 
 def _parse(words: list[str]) -> tuple[dict[str, str], list[str]] | None:
@@ -152,19 +153,19 @@ def _parse(words: list[str]) -> tuple[dict[str, str], list[str]] | None:
 
 
 def runner_prefix(python: str | None = None) -> str:
-    """Chama o jev-claude pelo Python absoluto: funciona mesmo sem o comando no PATH
-    (no Git Bash do Windows, por exemplo, o atalho `jev-claude.cmd` não é encontrado)."""
-    return f"{shlex.quote(Path(python or sys.executable).as_posix())} -m jev_claude run --"
+    """Chama o jev-claud pelo Python absoluto: funciona mesmo sem o comando no PATH
+    (no Git Bash do Windows, por exemplo, o atalho `jev-claud.cmd` não é encontrado)."""
+    return f"{shlex.quote(Path(python or sys.executable).as_posix())} -m jev_claud run --"
 
 
 def wrap_command(command: str, python: str | None = None) -> str | None:
-    """Reescreve um comando simples e ruidoso para `jev-claude run`; senão, None.
+    """Reescreve um comando simples e ruidoso para `jev-claud run`; senão, None.
 
     O resultado é um comando simples (sem pipe nem subshell), que o Claude Code consegue
     analisar e casar com as regras de permissão, e que sai com o código do comando original.
     """
     stripped = command.strip()
-    if not stripped or "jev-claude" in stripped or "jev_claude" in stripped or _COMPOUND.search(stripped):
+    if not stripped or "jev-claud" in stripped or "jev_claud" in stripped or _COMPOUND.search(stripped):
         return None
     try:
         words = shlex.split(stripped)
@@ -178,14 +179,14 @@ def wrap_command(command: str, python: str | None = None) -> str | None:
 def run_command(
     argv: Sequence[str], stdout: TextIO, *, log_dir: Path | None = None, env: Mapping[str, str] | None = None
 ) -> int:
-    """`jev-claude run -- comando`: executa, compacta a saída e devolve o código do comando.
+    """`jev-claud run -- comando`: executa, compacta a saída e devolve o código do comando.
 
-    Só aceita os testes, builds e linters conhecidos: assim, permitir `jev_claude run` nas
+    Só aceita os testes, builds e linters conhecidos: assim, permitir `jev_claud run` nas
     regras do Claude Code não vira uma porta para rodar qualquer coisa.
     """
     parsed = _parse(list(argv))
     if parsed is None:
-        stdout.write("jev-claude run: só aceita comandos de teste, build ou lint (ex.: pytest, npm test).\n")
+        stdout.write("jev-claud run: só aceita comandos de teste, build ou lint (ex.: pytest, npm test).\n")
         return 2
     extra, words = parsed
     full_env = {**(env if env is not None else os.environ), **extra}
@@ -200,7 +201,7 @@ def run_command(
             check=False,
         )
     except OSError as error:
-        stdout.write(f"jev-claude run: não foi possível executar {words[0]}: {error}\n")
+        stdout.write(f"jev-claud run: não foi possível executar {words[0]}: {error}\n")
         return 127
     except KeyboardInterrupt:
         return 130

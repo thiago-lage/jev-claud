@@ -1,14 +1,14 @@
 """Servidor MCP (stdio): o Claude delega trabalho pesado ao Jev e à LLM local.
 
 Para que serve: economizar tokens do Claude. Os dados volumosos nunca entram no contexto
-dele: o Claude manda uma instrução curta (ex.: "classifique `tickets.csv`"), o jev-claude
+dele: o Claude manda uma instrução curta (ex.: "classifique `tickets.csv`"), o jev-claud
 processa localmente e devolve só o resultado compacto (contagens, rótulos, um resumo).
 
 Ferramentas: `decide`, `classify`, `rank`, `summarize_file`, `write`, `status`.
 
-Registro no Claude Code (o `jev-claude setup` faz isto):
+Registro no Claude Code (o `jev-claud setup` faz isto):
 
-    claude mcp add -s user jev-claude -- python -m jev_claude mcp
+    claude mcp add -s user jev-claud -- python -m jev_claud mcp
 
 Implementação mínima do protocolo (JSON-RPC 2.0, uma mensagem por linha), sem dependências.
 """
@@ -22,12 +22,12 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from jev_claude import __version__, savings
-from jev_claude.core import JevClaude
-from jev_claude.decision import Band, Region
-from jev_claude.errors import JevClaudeError
-from jev_claude.media import Image
-from jev_claude.questions import Question, box, choice, noul, score
+from jev_claud import __version__, savings
+from jev_claud.core import JevClaud
+from jev_claud.decision import Band, Region
+from jev_claud.errors import JevClaudError
+from jev_claud.media import Image
+from jev_claud.questions import Question, box, choice, noul, score
 
 MAX_ITEMS = 500
 MAX_FILE_CHARS = 400_000
@@ -192,12 +192,12 @@ class ToolError(Exception):
 
 
 class Server:
-    def __init__(self, app_factory: Callable[[], JevClaude] = JevClaude) -> None:
+    def __init__(self, app_factory: Callable[[], JevClaud] = JevClaud) -> None:
         self._factory = app_factory
-        self._app: JevClaude | None = None
+        self._app: JevClaud | None = None
 
     @property
-    def app(self) -> JevClaude:
+    def app(self) -> JevClaud:
         if self._app is None:
             self._app = self._factory()
         return self._app
@@ -237,7 +237,7 @@ class Server:
         return {
             "protocolVersion": requested if isinstance(requested, str) else FALLBACK_PROTOCOL,
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "jev-claude", "version": __version__},
+            "serverInfo": {"name": "jev-claud", "version": __version__},
             "instructions": INSTRUCTIONS,
         }
 
@@ -258,7 +258,7 @@ class Server:
             return _text("`arguments` deve ser um objeto.", error=True)
         try:
             output = handler(arguments)
-        except (ToolError, JevClaudeError, ValueError, OSError) as error:
+        except (ToolError, JevClaudError, ValueError, OSError) as error:
             return _text(str(error), error=True)
         text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)
         self._record_saving(str(name), arguments, len(text))

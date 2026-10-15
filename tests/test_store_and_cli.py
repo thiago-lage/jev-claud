@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 
 import pytest
 
-from jev_claude import Store
-from jev_claude.cli import main
+from jev_claud import Store
+from jev_claud.cli import main
 
 
 def test_store_cache_roundtrip_and_expiry(tmp_path: object) -> None:
@@ -115,5 +116,39 @@ def test_cli_write_without_llm(capsys: pytest.CaptureFixture[str]) -> None:
 def test_cli_without_command_shows_splash(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 0
     out = capsys.readouterr().out
-    assert "jev-claude setup" in out and "jev-claude -h" in out
+    assert "jev-claud setup" in out and "jev-claud -h" in out
     assert "nenhuma economia registrada ainda este mês" in out
+
+
+def test_data_from_jev_claude_is_migrated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Quem vem da 0.6: a pasta `jev-claude` e o banco `jev_claude.sqlite3` mudam de nome."""
+    from jev_claud.store import default_home
+
+    monkeypatch.delenv("JEV_CLAUD_HOME", raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    old = tmp_path / "jev-claude"
+    old.mkdir()
+    (old / "config.json").write_text('{"budget_usd": 2}', encoding="utf-8")
+    legacy = Store(old / "jev_claude.sqlite3")
+    legacy.record(0.5, 1000)
+    legacy.close()
+
+    home = default_home()
+    assert home == tmp_path / "jev-claud" and not old.exists()
+    assert (home / "config.json").read_text(encoding="utf-8") == '{"budget_usd": 2}'
+    store = Store()
+    assert store.path == str(home / "jev_claud.sqlite3")
+    assert store.spent()[0] == pytest.approx(0.5)
+    store.close()
+
+
+def test_old_env_names_still_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    from jev_claud import Settings
+
+    monkeypatch.setenv("JEV_CLAUDE_BUDGET_USD", "3")
+    monkeypatch.setenv("JEV_CLAUDE_STRATEGY", "jev")
+    settings = Settings.from_env()
+    assert settings.budget_usd == 3.0 and settings.strategy == "jev"
+    monkeypatch.setenv("JEV_CLAUD_BUDGET_USD", "4")  # o nome novo tem prioridade
+    assert Settings.from_env().budget_usd == 4.0

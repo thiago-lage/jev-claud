@@ -16,10 +16,10 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from jev_claude.backends.base import RawAnswer, RawResult
-from jev_claude.decision import choice_confidence, score_confidence
-from jev_claude.errors import BackendError
-from jev_claude.questions import Choice, Noul, Question, Score
+from jev_claud.backends.base import RawAnswer, RawResult
+from jev_claud.decision import choice_confidence, score_confidence
+from jev_claud.errors import BackendError
+from jev_claud.questions import Choice, Noul, Question, Score
 
 MODEL_NAME = "offline-lexical-1"
 

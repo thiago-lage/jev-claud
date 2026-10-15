@@ -8,14 +8,14 @@ from typing import Any
 import pytest
 
 from conftest import FakeClient, choice_answer, noul_answer, score_answer
-from jev_claude import (
+from jev_claud import (
     BackendError,
     Band,
     BudgetExceeded,
     CallableWriter,
     Case,
     JevBackend,
-    JevClaude,
+    JevClaud,
     NoWriterError,
     Settings,
     choice,
@@ -23,7 +23,7 @@ from jev_claude import (
     score,
 )
 
-Factory = Callable[..., JevClaude]
+Factory = Callable[..., JevClaud]
 
 QUESTIONS = {
     "setor": choice("Qual setor?", {"financeiro": "cobrança", "suporte": "erro"}),
@@ -44,7 +44,7 @@ def ticket_answers() -> dict[str, Any]:
 
 
 def test_without_key_everything_runs_offline_for_free() -> None:
-    with JevClaude(store=":memory:", writer=None) as r:
+    with JevClaud(store=":memory:", writer=None) as r:
         assert r.jev is None
         d = r.decide("Fui cobrado duas vezes", QUESTIONS)
     assert d.source == "offline"
@@ -54,7 +54,7 @@ def test_without_key_everything_runs_offline_for_free() -> None:
 
 def test_auto_enables_jev_when_key_and_sdk_present(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts-teste")
-    with JevClaude(store=":memory:", writer=None) as r:
+    with JevClaud(store=":memory:", writer=None) as r:
         assert isinstance(r.jev, JevBackend)
 
 
@@ -129,12 +129,12 @@ def test_zero_budget_never_calls_jev_and_warns_once(
 ) -> None:
     client = FakeClient(ticket_answers())
     r = make_jev(client, budget=0.0)
-    with caplog.at_level(logging.WARNING, logger="jev_claude"):
+    with caplog.at_level(logging.WARNING, logger="jev_claud"):
         d1 = r.decide("Fui cobrado duas vezes", QUESTIONS)
         d2 = r.decide("Outro texto", QUESTIONS)
     assert client.calls == []
     assert d1.source == d2.source == "offline"
-    assert sum("JEV_CLAUDE_BUDGET_USD" in m for m in caplog.messages) == 1
+    assert sum("JEV_CLAUD_BUDGET_USD" in m for m in caplog.messages) == 1
 
 
 def test_budget_is_enforced_across_calls(make_jev: Factory) -> None:
@@ -260,7 +260,7 @@ def test_rank_orders_by_score(make_jev: Factory) -> None:
 
 
 def test_rank_offline() -> None:
-    with JevClaude(store=":memory:", writer=None) as r:
+    with JevClaud(store=":memory:", writer=None) as r:
         ranked = r.rank("cancelar assinatura", ["receita de bolo", "como cancelar a assinatura"])
     assert ranked[0].item == "como cancelar a assinatura"
 
@@ -269,12 +269,12 @@ def test_rank_offline() -> None:
 
 
 def test_write_requires_a_writer() -> None:
-    with JevClaude(store=":memory:", writer=None) as r, pytest.raises(NoWriterError):
+    with JevClaud(store=":memory:", writer=None) as r, pytest.raises(NoWriterError):
         r.write("oi")
 
 
 def test_write_auto_detects_nothing_in_clean_env() -> None:
-    with JevClaude(store=":memory:") as r:
+    with JevClaud(store=":memory:") as r:
         assert r.writer is None
 
 
@@ -285,7 +285,7 @@ def test_write_passes_context_and_system() -> None:
         received.append((prompt, system))
         return "Olá!"
 
-    with JevClaude(store=":memory:", writer=CallableWriter(fake_llm)) as r:
+    with JevClaud(store=":memory:", writer=CallableWriter(fake_llm)) as r:
         assert r.write("Responda ao cliente.", context={"ticket": "cobrança"}, system="Seja breve.") == "Olá!"
     prompt, system = received[0]
     assert prompt.startswith("Responda ao cliente.") and '"ticket": "cobrança"' in prompt
@@ -359,11 +359,11 @@ def test_status_reports_configuration(make_jev: Factory) -> None:
 
 
 def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JEV_CLAUDE_BUDGET_USD", "1,50")
-    monkeypatch.setenv("JEV_CLAUDE_MODEL", "preview")
+    monkeypatch.setenv("JEV_CLAUD_BUDGET_USD", "1,50")
+    monkeypatch.setenv("JEV_CLAUD_MODEL", "preview")
     settings = Settings.from_env()
     assert settings.budget_usd == 1.5 and settings.model == "preview"
-    monkeypatch.setenv("JEV_CLAUDE_BUDGET_USD", "muito")
+    monkeypatch.setenv("JEV_CLAUD_BUDGET_USD", "muito")
     with pytest.raises(ValueError):
         Settings.from_env()
 
