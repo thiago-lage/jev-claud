@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from jev_claude.errors import BudgetExceeded
+from jev_claude.media import IMAGE_TOKENS, references
 
 USD_PER_MTOK = 0.042
 # Uma requisição mínima de uma pergunta mediu ~300 tokens de entrada nos exemplos da API:
@@ -45,6 +46,7 @@ class Budget:
             REQUEST_OVERHEAD_TOKENS
             + QUESTION_OVERHEAD_TOKENS * len(wire_questions)
             + math.ceil(chars / CHARS_PER_TOKEN)
+            + IMAGE_TOKENS * len(references(state, wire_questions))
         )
 
     def check(self, estimated_tokens: int, spent_usd: float) -> None:

@@ -14,7 +14,7 @@ from jev_claude.backends import JevBackend, OfflineBackend
 from jev_claude.budget import Budget
 from jev_claude.config import Settings
 from jev_claude.core import Case, JevClaude, Ranked
-from jev_claude.decision import Band, Decision, Decisions, Policy
+from jev_claude.decision import Band, Decision, Decisions, Policy, Region
 from jev_claude.errors import (
     BackendError,
     BudgetExceeded,
@@ -23,15 +23,17 @@ from jev_claude.errors import (
     QuestionError,
     WriterError,
 )
-from jev_claude.questions import Choice, Noul, Score, choice, noul, score
+from jev_claude.media import Image
+from jev_claude.questions import Box, Choice, Noul, Score, box, choice, noul, score
 from jev_claude.store import Store
 from jev_claude.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
 
-__version__ = "0.3.1"
+__version__ = "0.5.0"
 
 __all__ = [
     "BackendError",
     "Band",
+    "Box",
     "Budget",
     "BudgetExceeded",
     "CallableWriter",
@@ -39,6 +41,7 @@ __all__ = [
     "Choice",
     "Decision",
     "Decisions",
+    "Image",
     "JevBackend",
     "JevClaude",
     "JevClaudeError",
@@ -50,12 +53,14 @@ __all__ = [
     "Policy",
     "QuestionError",
     "Ranked",
+    "Region",
     "Score",
     "Settings",
     "Store",
     "Writer",
     "WriterError",
     "__version__",
+    "box",
     "choice",
     "noul",
     "score",

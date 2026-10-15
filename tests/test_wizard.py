@@ -13,7 +13,7 @@ import pytest
 from jev_claude import Settings
 from jev_claude.cli import main
 from jev_claude.config import config_path, load_config, save_config
-from jev_claude.wizard import PACKAGE_SPEC, RULE_START, UI, Setup, System
+from jev_claude.wizard import CLAUDE_RULE, PACKAGE_SPEC, RULE_END, RULE_START, UI, Setup, System
 
 
 class FakeSystem(System):
@@ -31,6 +31,7 @@ class FakeSystem(System):
         in_venv: bool = True,
         tools: Sequence[str] = ("winget", "brew"),
         mcp: bool = False,
+        plugin: bool = False,
     ) -> None:
         self.platform = platform
         self.home = tmp_path / "home"
@@ -46,6 +47,8 @@ class FakeSystem(System):
             "sdk": sdk,
             "marketplace": False,
             "mcp": mcp,
+            "plugin": plugin,
+            "jev_marketplace": False,
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -72,9 +75,9 @@ class FakeSystem(System):
         elif "claude.ai/install" in joined:
             self.state["claude"] = True
         elif command[1:4] == ["plugin", "marketplace", "add"]:
-            self.state["marketplace"] = True
+            self.state["jev_marketplace" if command[4] == "thiago-lage/jev-claude" else "marketplace"] = True
         elif command[1:3] == ["plugin", "install"]:
-            self.state["skill"] = True
+            self.state["plugin" if command[3] == "jev-claude@jev-claude" else "skill"] = True
         elif command[1:3] == ["mcp", "add"]:
             self.state["mcp"] = True
         elif "typesafe-sdk" in command:
@@ -85,9 +88,17 @@ class FakeSystem(System):
         if command[-1] == "--version":
             return 0, "2.1.300 (Claude Code)\n"
         if list(command[1:3]) == ["plugin", "list"]:
-            return 0, "typesafe@typesafe-ai\n" if self.state["skill"] else "Nenhum plugin\n"
+            installed = [
+                name
+                for name, key in (("typesafe@typesafe-ai", "skill"), ("jev-claude@jev-claude", "plugin"))
+                if self.state[key]
+            ]
+            return 0, "\n".join(installed) + "\n" if installed else "Nenhum plugin\n"
         if list(command[1:4]) == ["plugin", "marketplace", "list"]:
-            return 0, "typesafe-ai\n" if self.state["marketplace"] else "anthropic\n"
+            names = ["anthropic"]
+            names += ["typesafe-ai"] if self.state["marketplace"] else []
+            names += ["jev-claude"] if self.state["jev_marketplace"] else []
+            return 0, "\n".join(names) + "\n"
         if list(command[1:4]) == ["mcp", "get", "jev-claude"]:
             return (0, "jev-claude: connected\n") if self.state["mcp"] else (1, "No MCP server named\n")
         return 1, ""
@@ -131,10 +142,14 @@ def ready_system(tmp_path: Path) -> FakeSystem:
         skill=True,
         sdk=True,
         mcp=True,
+        plugin=True,
     )
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
-    rule.write_text(f"# Minhas regras\n\n{RULE_START}\n", encoding="utf-8")
+    rule.write_text(f"# Minhas regras\n\n{CLAUDE_RULE}", encoding="utf-8")
+    shim = system.home / ".local" / "bin" / "jev-claude"
+    shim.parent.mkdir(parents=True)
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
     return system
 
 
@@ -162,6 +177,10 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
     assert "/bin/claude plugin marketplace add typesafe-ai/skills" in commands
     assert "/bin/claude plugin install typesafe@typesafe-ai" in commands
     assert "/bin/claude mcp add -s user jev-claude -- python -m jev_claude mcp" in commands
+    assert "/bin/claude plugin marketplace add thiago-lage/jev-claude" in commands
+    assert "/bin/claude plugin install jev-claude@jev-claude" in commands
+    shim = (system.home / ".local" / "bin" / "jev-claude").read_bytes()
+    assert shim == b'#!/bin/sh\nexec "python" -m jev_claude "$@"\n'
     assert system.spawned == [["/bin/ollama", "serve"]]
     assert report.results["jev_key"] is False  # exige digitar: fica para o modo interativo
     assert RULE_START in (system.home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
@@ -372,3 +391,24 @@ def test_config_used_by_jevclaude(tmp_path: Path) -> None:
         assert r.budget.monthly_usd == 3.0
         assert r.status()["jev"]["api_key"] is True
     assert json.loads(config_path().read_text(encoding="utf-8"))["typesafe_api_key"] == "ts-arquivo"
+
+
+def test_old_rule_block_is_replaced_in_place(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, ollama=True, server=True, models=["llama3.2:latest"])
+    rule = system.home / ".claude" / "CLAUDE.md"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(f"# Antes\n\n{RULE_START}\nregra antiga\n{RULE_END}\n\n# Depois\n", encoding="utf-8")
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui).run("yes")
+    text = rule.read_text(encoding="utf-8")
+    assert "regra antiga" not in text
+    assert text == f"# Antes\n\n{CLAUDE_RULE}\n# Depois\n"
+    assert "implemente direto" in text
+
+
+def test_plugin_shim_only_on_windows(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    ui, _ = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    assert report.results["plugin"] is True
+    assert not (system.home / ".local" / "bin" / "jev-claude").exists()

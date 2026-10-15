@@ -15,9 +15,9 @@ class RawAnswer:
     """Resposta crua de um backend, antes da política de confiança."""
 
     kind: Kind
-    value: str | float  # choice: rótulo; noul: p(sim); score: grau esperado
+    value: str | float | Mapping[str, float]  # choice: rótulo; noul: p(sim); score: grau; box: bordas
     probabilities: Mapping[str, float] = field(default_factory=dict)
-    confidence: float | None = None  # None para noul (calculada a partir de p)
+    confidence: float | None = None  # None para noul (calculada a partir de p) e box sem confiança
     legend: Mapping[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:

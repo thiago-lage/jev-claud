@@ -1,21 +1,27 @@
-"""Linha de comando: `jev-claude setup | mcp | doctor | ask | write | models | spend | update | cache`."""
+"""Linha de comando do jev-claude.
+
+Subcomandos: setup, mcp, compact, run, hook, doctor, ask, write, models, spend, update, cache.
+"""
 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import subprocess
 import sys
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from jev_claude import __version__
 from jev_claude.core import JevClaude
+from jev_claude.decision import Region
 from jev_claude.errors import JevClaudeError
+from jev_claude.media import Image
 from jev_claude.models import forget_newest, resolve_model
-from jev_claude.questions import Question, choice, noul, score
+from jev_claude.questions import Question, box, choice, noul, score
 from jev_claude.wizard import PACKAGE_SPEC, Mode, needs_first_run, run_setup
 
 
@@ -60,16 +66,33 @@ def _parser() -> argparse.ArgumentParser:
     mcp = sub.add_parser("mcp", help="servidor MCP (stdio) para o Claude delegar decisões e textos")
     mcp.set_defaults(standalone=_mcp)
 
+    compact = sub.add_parser(
+        "compact", help="compacta a saída longa de um teste/build lida da entrada (sem LLM, grátis)"
+    )
+    compact.set_defaults(standalone=_compact)
+
+    run = sub.add_parser(
+        "run", help="roda um teste/build e compacta a saída, mantendo o código de saída (ex.: run -- pytest)"
+    )
+    run.add_argument("command", nargs=argparse.REMAINDER, help="o comando, depois de --")
+    run.set_defaults(standalone=_run)
+
+    hook = sub.add_parser("hook", help="hooks do plugin do Claude Code (lê o evento JSON da entrada)")
+    hook.add_argument("name", choices=["pre-bash"])
+    hook.set_defaults(standalone=_hook)
+
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
     doctor.set_defaults(handler=_doctor)
 
-    ask = sub.add_parser("ask", help="faz uma pergunta tipada sobre um texto")
-    ask.add_argument("state", help="texto a avaliar")
+    ask = sub.add_parser("ask", help="faz uma pergunta tipada sobre um texto e/ou uma imagem")
+    ask.add_argument("state", nargs="?", default="", help="texto a avaliar (opcional com --image)")
     kind = ask.add_mutually_exclusive_group(required=True)
     kind.add_argument("--noul", metavar="PERGUNTA", help="condição sim/não")
     kind.add_argument("--choice", metavar="PERGUNTA", help="escolha entre --option")
     kind.add_argument("--score", metavar="PERGUNTA", help="grau ao longo de --level")
+    kind.add_argument("--box", metavar="PERGUNTA", help="onde algo está na imagem (exige o Jev)")
+    ask.add_argument("--image", type=Path, help="imagem a avaliar (PNG/JPEG; exige o Jev)")
     ask.add_argument("-o", "--option", action="append", default=[], help="opção (rótulo ou rótulo=descrição)")
     ask.add_argument("-l", "--level", action="append", default=[], help="nível do score, do menor ao maior")
     ask.add_argument("--model", help="latest | preview | newest | jev-X.Y.Z")
@@ -123,7 +146,10 @@ def _doctor(r: JevClaude, args: argparse.Namespace) -> int:
     )
     print("\nTexto (uma pessoa lê):")
     print(f"  LLM          : {_describe_writer(writer)}")
+    if r.jev is not None:
+        print(f"  estratégia   : {r.strategy}  (offline aceito com confiança >= {r.cascade_accept:.2f})")
     print(f"\nCache: {status['cache']['entries']} decisões em {status['cache']['path']}")
+    _print_routing(r)
     return 0
 
 
@@ -147,11 +173,22 @@ def _ask(r: JevClaude, args: argparse.Namespace) -> int:
             label, _, description = raw.partition("=")
             options[label.strip()] = description.strip() or None
         question = choice(args.choice, options)
+    elif args.box:
+        question = box(args.box)
     else:
         question = score(args.score, args.level)
-    decision = r.ask(args.state, question, model=args.model)
+    state: Any = args.state
+    if args.image is not None:
+        image = Image(args.image)
+        state = {"texto": args.state, "imagem": image} if args.state else image
+    elif not args.state:
+        raise JevClaudeError("Informe um texto ou --image.")
+    decision = r.ask(state, question, model=args.model)
     if args.json:
         print(json.dumps(decision.as_dict(), ensure_ascii=False, indent=2))
+    elif isinstance(decision.value, Region):
+        sides = ", ".join(f"{k}={v:.3f}" for k, v in decision.value.as_dict().items())
+        print(f"{sides}  confiança={decision.confidence:.2f} [{decision.band.value}]  via {decision.source}")
     else:
         detail = f" (p={decision.probability:.3f})" if decision.probability is not None else ""
         confidence = f"confiança={decision.confidence:.2f} [{decision.band.value}]"
@@ -176,10 +213,34 @@ def _spend(r: JevClaude, args: argparse.Namespace) -> int:
     rows = r.store.ledger()
     if not rows:
         print("Nenhum gasto registrado. Custo zero até aqui.")
-        return 0
     for month, usd, tokens, calls in rows:
         print(f"{month}  US$ {usd:.6f}  {tokens} tokens  {calls} chamadas")
+    _print_routing(r)
     return 0
+
+
+ROUTING_LABELS = {
+    "cache": "cache (repetidas)",
+    "offline": "offline (grátis)",
+    "jev": "Jev (pagas)",
+    "fallback": "offline por falta de orçamento/erro",
+}
+
+
+def _print_routing(r: JevClaude) -> None:
+    routing = r.store.routing()
+    total = sum(n for n, _ in routing.values())
+    if not total:
+        return
+    print(f"\nQuem respondeu as perguntas este mês (estratégia: {r.strategy}):")
+    for layer, label in ROUTING_LABELS.items():
+        n, _ = routing.get(layer, (0, 0))
+        if n:
+            print(f"  {label:<38} {n:>6}  ({n / total:.0%})")
+    saved = sum(tokens for _, tokens in routing.values())
+    if saved:
+        usd = r.budget.cost(saved)
+        print(f"  economia estimada: ~{saved} tokens do Jev (~US$ {usd:.6f})")
 
 
 def _setup(args: argparse.Namespace) -> int:
@@ -191,6 +252,33 @@ def _mcp(args: argparse.Namespace) -> int:
     from jev_claude.mcp import serve
 
     return serve()
+
+
+def _utf8_streams() -> tuple[TextIO, TextIO]:
+    """Entrada e saída em UTF-8 mesmo no console do Windows (logs trazem qualquer caractere)."""
+    for stream in (sys.stdin, sys.stdout):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    return sys.stdin, sys.stdout
+
+
+def _compact(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_filter
+
+    return run_filter(*_utf8_streams())
+
+
+def _run(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_command
+
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    return run_command(command, _utf8_streams()[1])
+
+
+def _hook(args: argparse.Namespace) -> int:
+    from jev_claude.compact import run_hook
+
+    return run_hook(args.name, *_utf8_streams())
 
 
 def _installed_editable() -> bool:

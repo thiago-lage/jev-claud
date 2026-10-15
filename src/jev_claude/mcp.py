@@ -24,9 +24,10 @@ from typing import Any, BinaryIO
 
 from jev_claude import __version__
 from jev_claude.core import JevClaude
-from jev_claude.decision import Band
+from jev_claude.decision import Band, Region
 from jev_claude.errors import JevClaudeError
-from jev_claude.questions import Question, choice, noul, score
+from jev_claude.media import Image
+from jev_claude.questions import Question, box, choice, noul, score
 
 MAX_ITEMS = 500
 MAX_FILE_CHARS = 400_000
@@ -35,17 +36,18 @@ FALLBACK_PROTOCOL = "2025-06-18"
 
 INSTRUCTIONS = """\
 Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do Claude.
-- Muitos itens para classificar, filtrar ou ranquear, ou um arquivo grande para resumir: chame
-  `classify`, `rank` ou `summarize_file` passando o CAMINHO do arquivo, em vez de lê-lo.
+- Muitos itens para classificar, filtrar ou ranquear, ou um arquivo de dados grande para resumir:
+  chame `classify`, `rank` ou `summarize_file` passando o CAMINHO do arquivo, em vez de lê-lo.
 - Decisão tipada que o código vai ramificar: `decide` (TypeSafe Jev; offline grátis sem orçamento).
-- Rascunho longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local, grátis).
+- Texto em prosa longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local).
   Revise antes de mostrar ao usuário: a LLM local é bem menos capaz que o Claude.
-Para uma pergunta pequena e única, responda direto: chamar a ferramenta custaria mais."""
+Nunca use estas ferramentas para escrever, gerar ou editar código: implemente você mesmo,
+editando os arquivos. Para uma pergunta pequena e única, responda direto."""
 
 _QUESTION_SCHEMA = {
     "type": "object",
     "properties": {
-        "type": {"type": "string", "enum": ["choice", "noul", "score"]},
+        "type": {"type": "string", "enum": ["choice", "noul", "score", "box"]},
         "instructions": {"type": "string", "description": "A pergunta, completa (o nome não é enviado)."},
         "options": {
             "type": "object",
@@ -72,15 +74,21 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "decide",
         "description": (
-            "Decisões tipadas (choice/noul/score) sobre um texto ou objeto, para o código ramificar. "
-            "Várias perguntas independentes numa chamada. Usa o TypeSafe Jev quando há orçamento; "
-            "senão, heurística offline grátis (confira `source` e `confidence`)."
+            "Decisões tipadas (choice/noul/score/box) sobre um texto, objeto ou imagem, para o código "
+            "ramificar. Várias perguntas independentes numa chamada. Cascata: o óbvio sai grátis "
+            "(offline), só o incerto vai ao TypeSafe Jev quando há orçamento (confira `source`). "
+            "Imagens e `box` (onde algo está na imagem) exigem o Jev."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "state": {"description": "Texto ou JSON a avaliar.", "type": ["string", "object", "array"]},
                 "file": {"type": "string", "description": "Ou: caminho de um arquivo lido localmente."},
+                "images": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Caminhos de imagens (PNG/JPEG) a avaliar junto com o estado.",
+                },
                 "questions": {
                     "type": "object",
                     "description": "nome -> pergunta.",
@@ -154,8 +162,8 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "write",
         "description": (
-            "Gera texto com a LLM local (Ollama, grátis): rascunhos, variações, traduções simples, textos "
-            "repetitivos. Revise o resultado; para textos importantes, escreva você mesmo."
+            "Gera prosa com a LLM local (Ollama, grátis): rascunhos, variações, traduções simples, textos "
+            "repetitivos. Nunca para código. Revise o resultado; para textos importantes, escreva você mesmo."
         ),
         "inputSchema": {
             "type": "object",
@@ -258,17 +266,27 @@ class Server:
 
     def decide(self, args: Mapping[str, Any]) -> dict[str, Any]:
         state = _read_file(args["file"], MAX_FILE_CHARS) if args.get("file") else args.get("state")
+        images = args.get("images") or []
+        if not isinstance(images, list):
+            raise ToolError("`images` deve ser uma lista de caminhos.")
+        if images:
+            loaded = [Image(Path(str(path)).expanduser()) for path in images]
+            pictures: Any = loaded[0] if len(loaded) == 1 else loaded
+            state = {"texto": state, "imagens": pictures} if state not in (None, "") else pictures
         if state in (None, ""):
-            raise ToolError("Informe `state` ou `file`.")
+            raise ToolError("Informe `state`, `file` ou `images`.")
         raw = args.get("questions")
         if not isinstance(raw, dict) or not raw:
             raise ToolError("`questions` deve ser um objeto nome -> pergunta.")
         decisions = self.app.decide(state, {name: _question(name, q) for name, q in raw.items()})
-        return {
+        result: dict[str, Any] = {
             "source": decisions.source,
             "cost_usd": round(decisions.cost_usd, 8),
             "decisions": {name: _compact(d) for name, d in decisions.items()},
         }
+        if decisions.escalated:
+            result["escalated"] = list(decisions.escalated)
+        return result
 
     def classify(self, args: Mapping[str, Any]) -> dict[str, Any]:
         items = _items(args)
@@ -379,12 +397,14 @@ def _question(name: str, spec: Any) -> Question:
         return noul(instructions, yes=spec.get("yes"), no=spec.get("no"))
     if kind == "score":
         return score(instructions, spec.get("levels") or [])
-    raise ToolError(f"Pergunta {name!r}: `type` deve ser choice, noul ou score.")
+    if kind == "box":
+        return box(instructions)
+    raise ToolError(f"Pergunta {name!r}: `type` deve ser choice, noul, score ou box.")
 
 
 def _compact(decision: Any) -> dict[str, Any]:
     out: dict[str, Any] = {
-        "value": decision.value,
+        "value": decision.value.as_dict() if isinstance(decision.value, Region) else decision.value,
         "confidence": round(decision.confidence, 3),
         "band": decision.band.value,
     }

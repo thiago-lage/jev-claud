@@ -17,6 +17,7 @@ from jev_claude.budget import USD_PER_MTOK
 from jev_claude.store import default_home
 
 DAY = 24 * 3600
+STRATEGIES = ("cascade", "jev")
 
 CONFIG_KEYS = frozenset(
     {
@@ -27,6 +28,8 @@ CONFIG_KEYS = frozenset(
         "typesafe_api_key",
         "ollama_model",
         "setup_version",
+        "strategy",
+        "cascade_accept",
     }
 )
 
@@ -98,6 +101,18 @@ class Settings:
     """`TYPESAFE_API_KEY`: chave do Jev."""
     ollama_model: str | None = None
     """`JEV_CLAUDE_OLLAMA_MODEL`: modelo do Ollama para texto (padrão `llama3.2`)."""
+    strategy: str = "cascade"
+    """`JEV_CLAUDE_STRATEGY`: `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev)."""
+    cascade_accept: float = 0.8
+    """`JEV_CLAUDE_CASCADE_ACCEPT`: confiança mínima para aceitar a resposta offline na cascata."""
+
+    def __post_init__(self) -> None:
+        if self.strategy not in STRATEGIES:
+            raise ValueError(
+                f"JEV_CLAUDE_STRATEGY deve ser {' ou '.join(STRATEGIES)}, recebido {self.strategy!r}."
+            )
+        if not 0.0 <= self.cascade_accept <= 1.0:
+            raise ValueError("JEV_CLAUDE_CASCADE_ACCEPT deve estar entre 0 e 1.")
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -109,4 +124,6 @@ class Settings:
             cache_ttl_days=_float("JEV_CLAUDE_CACHE_TTL_DAYS", file.get("cache_ttl_days"), 7.0),
             typesafe_api_key=_text("TYPESAFE_API_KEY", file.get("typesafe_api_key")),
             ollama_model=_text("JEV_CLAUDE_OLLAMA_MODEL", file.get("ollama_model")),
+            strategy=(_text("JEV_CLAUDE_STRATEGY", file.get("strategy")) or "cascade").lower(),
+            cascade_accept=_float("JEV_CLAUDE_CASCADE_ACCEPT", file.get("cascade_accept"), 0.8),
         )

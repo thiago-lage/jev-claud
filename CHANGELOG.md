@@ -3,6 +3,40 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-10-15
+
+### Adicionado
+
+- **Cascata** (estratégia padrão com o Jev ligado): cache -> offline grátis -> Jev só para as
+  perguntas que o offline não resolveu com confiança (`JEV_CLAUDE_CASCADE_ACCEPT`, 0,8), numa
+  única requisição. `Decisions.source` ganha `"mixed"`, `Decisions.escalated` diz o que foi ao
+  Jev e cada `Decision.source` diz de onde veio. `rank` nunca mistura offline e Jev.
+  `JEV_CLAUDE_STRATEGY=jev` mantém o comportamento anterior.
+- Relatório de roteamento: `jev-claude spend` e `doctor` mostram quantas perguntas cada camada
+  respondeu e os tokens do Jev economizados.
+- **Imagens** (System One com visão): `Image(caminho | bytes)` no estado, em listas ou dentro
+  de textos, enviadas como assets do `typesafe-sdk`; referência estável por conteúdo (o cache
+  funciona). Pergunta **`Box`** (`box(...)`) devolve uma `Region` (bordas em frações,
+  `to_pixels`, `area`, `center`). CLI: `ask --image --box`; MCP: `decide` com `images` e `box`.
+- `Decision.number`: o valor numérico de qualquer decisão não-box.
+
+## [0.4.0] - 2026-10-15
+
+### Adicionado
+
+- Plugin do Claude Code (`/plugin install jev-claude@jev-claude`, o repositório é o próprio
+  marketplace): hook que compacta saídas de testes/builds, skill `jev` e subagente `scout`.
+- `jev-claude run -- <comando>`: roda um teste/build, compacta a saída sem LLM, guarda a saída
+  completa em `logs/` e sai com o código do comando. Recusa comandos que não sejam teste/build/lint.
+- `jev-claude compact` (filtro de texto) e `jev-claude hook pre-bash` (usado pelo plugin).
+- `jev-claude setup` instala o plugin e, no Windows, cria o atalho `jev-claude` para o Git Bash.
+
+### Corrigido
+
+- A regra global podia levar o Claude Code a devolver código no chat ou delegar "rascunhos" ao
+  Ollama em vez de implementar. A regra (versão 2) e as instruções do MCP agora dizem para
+  implementar direto e nunca usar o Ollama/Jev para código. O `setup` substitui a versão antiga.
+
 ## [0.3.1] - 2026-10-15
 
 ### Corrigido
