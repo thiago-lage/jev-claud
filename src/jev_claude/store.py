@@ -36,6 +36,13 @@ CREATE TABLE IF NOT EXISTS routing (
     saved_tokens INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (month, layer)
 );
+CREATE TABLE IF NOT EXISTS savings (
+    month TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    events INTEGER NOT NULL DEFAULT 0,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (month, kind)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -165,6 +172,30 @@ class Store:
                 (month or current_month(),),
             ).fetchall()
         return {str(layer): (int(n), int(saved)) for layer, n, saved in rows}
+
+    # -- economia de contexto do Claude (compactação, ferramentas MCP) --------
+
+    def record_saving(self, kind: str, tokens: int, month: str | None = None) -> None:
+        if tokens <= 0:
+            return
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO savings (month, kind, events, tokens) VALUES (?, ?, 1, ?)
+                ON CONFLICT(month, kind) DO UPDATE SET
+                    events = events + 1,
+                    tokens = tokens + excluded.tokens
+                """,
+                (month or current_month(), kind, int(tokens)),
+            )
+
+    def savings(self, month: str | None = None) -> dict[str, tuple[int, int]]:
+        """Tipo -> (vezes, tokens do Claude economizados) no mês."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT kind, events, tokens FROM savings WHERE month = ?", (month or current_month(),)
+            ).fetchall()
+        return {str(kind): (int(n), int(tokens)) for kind, n, tokens in rows}
 
     # -- metadados -----------------------------------------------------------
 

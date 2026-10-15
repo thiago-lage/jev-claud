@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+
+- Mascote do jev-claude no terminal: um robozinho em pixel art com a antena em forquilha
+  (a bifurcação que o Jev decide), na caixa do `setup` e na nova tela do `jev-claude` sem
+  argumentos, que lista os comandos principais (`-h` continua com a ajuda completa).
+  Terminais sem suporte aos blocos recebem uma versão em ASCII.
+- Economia de tokens em cinza, logo abaixo do mascote e no fim do `doctor` e do `spend`:
+  tokens do Claude poupados (saídas compactadas pelo hook e arquivos processados pelas
+  ferramentas MCP em vez de lidos) e tokens do Jev poupados (cascata e cache), no mês.
+
 ## [0.5.0] - 2026-10-15
 
 ### Adicionado

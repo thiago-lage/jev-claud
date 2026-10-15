@@ -22,7 +22,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from jev_claude import __version__
+from jev_claude import __version__, savings
 from jev_claude.core import JevClaude
 from jev_claude.decision import Band, Region
 from jev_claude.errors import JevClaudeError
@@ -260,7 +260,21 @@ class Server:
             output = handler(arguments)
         except (ToolError, JevClaudeError, ValueError, OSError) as error:
             return _text(str(error), error=True)
-        return _text(output if isinstance(output, str) else json.dumps(output, ensure_ascii=False))
+        text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)
+        self._record_saving(str(name), arguments, len(text))
+        return _text(text)
+
+    def _record_saving(self, name: str, args: Mapping[str, Any], answer_chars: int) -> None:
+        """O Claude recebeu `answer_chars` em vez de ler o arquivo inteiro."""
+        source = args.get("path") if name == "summarize_file" else args.get("file")
+        if not source:
+            return
+        try:
+            size = Path(str(source)).expanduser().stat().st_size
+        except OSError:
+            return
+        limit = int(args.get("max_chars") or 60_000) if name == "summarize_file" else MAX_FILE_CHARS
+        savings.record(savings.TOOLS, min(size, limit) - answer_chars, self.app.store)
 
     # -- ferramentas -------------------------------------------------------------------
 
