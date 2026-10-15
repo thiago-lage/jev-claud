@@ -1,8 +1,8 @@
 {
   "name": "jevin",
   "displayName": "Jevin",
-  "version": "0.7.1",
-  "description": "Poupa contexto e custo no Claude Code: saídas longas de testes e builds chegam compactadas (com o pacote jev-claud instalado), um subagente explora o código e devolve só a conclusão, e uma skill ensina quando usar decisões tipadas (TypeSafe Jev), texto (LLM) ou código puro.",
+  "version": "0.8.0",
+  "description": "Ensina o Claude Code a poupar contexto e custo sem mudar a entrega: uma skill diz quando usar decisões tipadas (TypeSafe Jev), texto (LLM) ou código puro, e um subagente explora o código em contexto separado e devolve só a conclusão.",
   "author": {
     "name": "Thiago Lage",
     "url": "https://github.com/thiago-lage"
@@ -16,10 +16,10 @@
     "ollama",
     "context",
     "tokens",
-    "mcp"
+    "subagent"
   ],
   "icon": "./icon.png",
   "documentationUrl": "https://github.com/thiago-lage/jev-claud#plugin-do-claude-code-jevin",
   "supportUrl": "https://github.com/thiago-lage/jev-claud/issues",
-  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud#o-que-o-plugin-roda-e-envia"
+  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud#o-que-o-jev-claud-roda-e-envia"
 }

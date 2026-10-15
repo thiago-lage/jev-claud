@@ -77,7 +77,9 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("command", nargs=argparse.REMAINDER, help="o comando, depois de --")
     run.set_defaults(standalone=_run)
 
-    hook = sub.add_parser("hook", help="hooks do plugin do Claude Code (lê o evento JSON da entrada)")
+    hook = sub.add_parser(
+        "hook", help="hooks do Claude Code gravados pelo setup (lê o evento JSON da entrada)"
+    )
     hook.add_argument("name", choices=["pre-bash"])
     hook.set_defaults(standalone=_hook)
 

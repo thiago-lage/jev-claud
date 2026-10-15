@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] - 2026-10-15
+
+### Alterado
+
+- **O hook que compacta as saídas de testes e builds saiu do plugin.** Agora o `jev-claud setup`
+  o grava no `~/.claude/settings.json` (passo "Saídas de teste compactadas"), chamando o Python do
+  jev-claud pelo caminho absoluto. O setup preserva o resto do arquivo, troca entradas antigas do
+  próprio hook e não mexe em um `settings.json` inválido.
+- **O plugin Jevin tem só texto** (a skill `jev` e o subagente `scout`): não roda nada, então o
+  diretório da Anthropic o valida sem revisão manual de scripts.
+- Regra global na versão 3: cita o hook do jev-claud, não o do plugin.
+- O selo do PyPI no README usa um endereço novo, sem o "not found" guardado em cache de antes da
+  primeira publicação.
+
+### Atualizar
+
+- Rode `jev-claud setup` depois de atualizar: sem isso, a compactação para quando o plugin for
+  atualizado para a 0.8. No Cowork, o hook não vem mais pelo plugin.
+
 ## [0.7.1] - 2026-10-15
 
 ### Corrigido

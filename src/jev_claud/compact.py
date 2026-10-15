@@ -152,10 +152,19 @@ def _parse(words: list[str]) -> tuple[dict[str, str], list[str]] | None:
     return env, words
 
 
-def runner_prefix(python: str | None = None) -> str:
-    """Chama o jev-claud pelo Python absoluto: funciona mesmo sem o comando no PATH
+def _python_arg(python: str | None = None) -> str:
+    """Python absoluto, citado para o shell: funciona mesmo sem o comando no PATH
     (no Git Bash do Windows, por exemplo, o atalho `jev-claud.cmd` não é encontrado)."""
-    return f"{shlex.quote(Path(python or sys.executable).as_posix())} -m jev_claud run --"
+    return shlex.quote(Path(python or sys.executable).as_posix())
+
+
+def runner_prefix(python: str | None = None) -> str:
+    return f"{_python_arg(python)} -m jev_claud run --"
+
+
+def hook_command(python: str | None = None) -> str:
+    """Comando do hook `PreToolUse` que o `jev-claud setup` grava no Claude Code."""
+    return f"{_python_arg(python)} -m jev_claud hook pre-bash"
 
 
 def wrap_command(command: str, python: str | None = None) -> str | None:

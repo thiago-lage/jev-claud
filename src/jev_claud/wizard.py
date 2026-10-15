@@ -7,9 +7,10 @@ Detecta o que falta, explica para que serve e pergunta antes de instalar cada pe
 3. Ollama + servidor + modelo         texto grátis na sua máquina
 4. Chave e orçamento do Jev           opcional; guardados em `config.json`
 5. Claude Code + skill TypeSafe       o agente que usa tudo isso
-6. Servidor MCP `jev-claud`          o Claude delega lotes ao Jev/Ollama e economiza tokens
-7. Plugin `jev-claud` no Claude Code  saídas compactadas, skill e subagente explorador
-8. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
+6. Servidor MCP `jev-claud`           o Claude delega lotes ao Jev/Ollama e economiza tokens
+7. Hook no `~/.claude/settings.json`  saídas longas de testes e builds compactadas
+8. Plugin Jevin no Claude Code        skill e subagente explorador
+9. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
 
 Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e `--check`
 (só verifica; código de saída 1 se faltar algo essencial).
@@ -33,6 +34,7 @@ from pathlib import Path
 from typing import Any, Literal, TextIO
 
 from jev_claud import mascot
+from jev_claud.compact import hook_command
 from jev_claud.config import config_path, load_config, save_config
 from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
@@ -50,7 +52,7 @@ OLD_MARKETPLACE = "jev-claude"
 OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
-RULE_VERSION = 2
+RULE_VERSION = 3
 CLAUDE_RULE = f"""{RULE_START}
 <!-- versão {RULE_VERSION}: o `jev-claud setup` substitui este bloco inteiro ao atualizar -->
 ## Como trabalhar
@@ -75,7 +77,7 @@ CLAUDE_RULE = f"""{RULE_START}
 - Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
   MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
 - Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
-- Saídas longas de testes e builds já chegam compactadas pelo hook do plugin; a saída completa
+- Saídas longas de testes e builds já chegam compactadas pelo hook do jev-claud; a saída completa
   fica no caminho indicado no rodapé, se precisar.
 {RULE_END}
 """
@@ -260,6 +262,23 @@ def _listed(output: str, name: str) -> bool:
     return any(name in line.replace("❯", " ").split() for line in output.splitlines())
 
 
+def _pre_tool_hooks(settings: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Hooks `PreToolUse` do settings.json, ignorando o que não tiver o formato esperado."""
+    hooks = settings.get("hooks")
+    groups = hooks.get("PreToolUse") if isinstance(hooks, dict) else None
+    found: list[dict[str, Any]] = []
+    for group in groups if isinstance(groups, list) else []:
+        entries = group.get("hooks") if isinstance(group, dict) else None
+        found += [hook for hook in entries if isinstance(hook, dict)] if isinstance(entries, list) else []
+    return found
+
+
+def _is_our_hook(hook: Any) -> bool:
+    """Hook pre-bash gravado por qualquer versão do jev-claud (ou do jev-claude, até a 0.6)."""
+    command = hook.get("command") if isinstance(hook, dict) else None
+    return isinstance(command, str) and command.rstrip().endswith(" hook pre-bash") and "jev" in command
+
+
 def _isatty(stream: Any) -> bool:
     try:
         return bool(stream.isatty())
@@ -335,6 +354,7 @@ class Setup:
         stored = load_config().get("ollama_model")
         self.model = ollama_model or (str(stored) if stored else None) or DEFAULT_OLLAMA_MODEL
         self.claude_md = claude_md or self.sys.home / ".claude" / "CLAUDE.md"
+        self.claude_settings = self.claude_md.parent / "settings.json"
         self.version = version
 
     # -- execução -------------------------------------------------------------
@@ -480,11 +500,20 @@ class Setup:
                 essential=False,
             ),
             Step(
+                "hook",
+                "Saídas de teste compactadas no Claude Code",
+                self._check_hook,
+                self._install_hook,
+                "Compactar as saídas longas de testes e builds antes de entrarem no contexto?",
+                requires=("claude",),
+                essential=False,
+            ),
+            Step(
                 "plugin",
-                "Plugin jev-claud no Claude Code",
+                "Plugin Jevin no Claude Code",
                 self._check_plugin,
                 self._install_plugin,
-                "Instalar o plugin (saídas de teste compactadas, skill e subagente explorador)?",
+                "Instalar o plugin Jevin (skill e subagente explorador)?",
                 requires=("claude",),
                 essential=False,
             ),
@@ -730,16 +759,12 @@ class Setup:
             if old is not None:
                 return False, f"nome antigo ({old}): atualizar para {PLUGIN_ID}"
             return False, "não instalado"
-        if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
-            return False, "falta o atalho do jev-claud para o Git Bash"
         return True, PLUGIN_ID
 
     def _install_plugin(self) -> bool:
         path = self._claude()
         if not path:
             return False
-        if self.sys.platform == "win32":
-            self._write_bash_shim()
         _, output = self.sys.capture([path, "plugin", "list"])
         _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
         if not _listed(output, PLUGIN_ID):
@@ -768,6 +793,63 @@ class Setup:
             shim.parent.mkdir(parents=True, exist_ok=True)
             shim.write_bytes(f'#!/bin/sh\nexec "{python}" -m jev_claud "$@"\n'.encode())
 
+    # -- hook de compactação -------------------------------------------------------------
+    # Fica no settings.json do usuário, e não no plugin: o hook chama o Python do jev-claud,
+    # que está fora do plugin (o diretório da Anthropic exigiria revisão manual do script).
+
+    def _read_settings(self) -> dict[str, Any] | None:
+        """settings.json do Claude Code; {} se não existe, None se não dá para editar com segurança."""
+        if not self.sys.exists(self.claude_settings):
+            return {}
+        try:
+            data = json.loads(self.claude_settings.read_text(encoding="utf-8") or "{}")
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _check_hook(self) -> tuple[bool, str]:
+        settings = self._read_settings()
+        if settings is None:
+            return False, f"{self.claude_settings} não é um JSON válido"
+        commands = [hook["command"] for hook in _pre_tool_hooks(settings) if _is_our_hook(hook)]
+        if hook_command(self.sys.python) not in commands:
+            if commands:
+                return False, "aponta para outra instalação do jev-claud"
+            return False, "testes e builds longos enchem o contexto do Claude"
+        if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
+            return False, "falta o atalho do jev-claud para o Git Bash"
+        return True, "testes e builds chegam compactados (desligue com JEV_CLAUD_COMPACT=0)"
+
+    def _install_hook(self) -> bool:
+        """Grava o hook no settings.json, preservando o resto e trocando versões anteriores dele."""
+        settings = self._read_settings()
+        hooks = settings.get("hooks", {}) if settings is not None else None
+        groups = hooks.get("PreToolUse", []) if isinstance(hooks, dict) else None
+        if settings is None or not isinstance(hooks, dict) or not isinstance(groups, list):
+            self.ui.warn(f"Não mexi em {self.claude_settings}: o conteúdo não está no formato esperado.")
+            return False
+        kept: list[Any] = []
+        for group in groups:
+            entries = group.get("hooks") if isinstance(group, dict) else None
+            if isinstance(entries, list):
+                others = [hook for hook in entries if not _is_our_hook(hook)]
+                if len(others) != len(entries):
+                    if not others:
+                        continue
+                    group = {**group, "hooks": others}
+            kept.append(group)
+        entry = {"type": "command", "command": hook_command(self.sys.python), "timeout": 10}
+        kept.append({"matcher": "Bash", "hooks": [entry]})
+        settings["hooks"] = {**hooks, "PreToolUse": kept}
+        if self.sys.platform == "win32":
+            self._write_bash_shim()
+        self.claude_settings.parent.mkdir(parents=True, exist_ok=True)
+        partial = self.claude_settings.with_name(self.claude_settings.name + ".jev-claud.tmp")
+        partial.write_text(json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(partial, self.claude_settings)
+        self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
+        return True
+
     # -- regra global ------------------------------------------------------------------
 
     def _check_rule(self) -> tuple[bool, str]:
@@ -776,7 +858,7 @@ class Setup:
             if CLAUDE_RULE.strip() in text:
                 return True, str(self.claude_md)
             if RULE_START in text or OLD_RULE_MARKERS[0] in text:
-                return False, "versão antiga (não pede para implementar direto)"
+                return False, "versão antiga: atualizar"
         return False, "Claude não sabe quando usar Jev ou LLM"
 
     def _write_rule(self) -> bool:

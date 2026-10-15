@@ -15,6 +15,9 @@ from jev_claud.cli import main
 from jev_claud.config import config_path, load_config, save_config
 from jev_claud.wizard import CLAUDE_RULE, PACKAGE_SPEC, RULE_END, RULE_START, UI, Setup, System
 
+# Hook que o setup grava no settings.json (o FakeSystem usa "python" como Python).
+HOOK = {"type": "command", "command": "python -m jev_claud hook pre-bash", "timeout": 10}
+
 
 class FakeSystem(System):
     def __init__(
@@ -165,6 +168,10 @@ def ready_system(tmp_path: Path) -> FakeSystem:
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
     rule.write_text(f"# Minhas regras\n\n{CLAUDE_RULE}", encoding="utf-8")
+    group = {"matcher": "Bash", "hooks": [HOOK]}
+    (rule.parent / "settings.json").write_text(
+        json.dumps({"hooks": {"PreToolUse": [group]}}), encoding="utf-8"
+    )
     shim = system.home / ".local" / "bin" / "jev-claud"
     shim.parent.mkdir(parents=True)
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -199,6 +206,8 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
     assert "/bin/claude plugin install jevin@jev-claud" in commands
     shim = (system.home / ".local" / "bin" / "jev-claud").read_bytes()
     assert shim == b'#!/bin/sh\nexec "python" -m jev_claud "$@"\n'
+    settings = json.loads((system.home / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert settings == {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [HOOK]}]}}
     assert system.spawned == [["/bin/ollama", "serve"]]
     assert report.results["jev_key"] is False  # exige digitar: fica para o modo interativo
     assert RULE_START in (system.home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
@@ -424,12 +433,60 @@ def test_old_rule_block_is_replaced_in_place(tmp_path: Path) -> None:
     assert "implemente direto" in text
 
 
-def test_plugin_shim_only_on_windows(tmp_path: Path) -> None:
+def test_bash_shim_only_on_windows(tmp_path: Path) -> None:
     system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
     ui, _ = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
-    assert report.results["plugin"] is True
+    assert report.results["plugin"] is True and report.results["hook"] is True
     assert not (system.home / ".local" / "bin" / "jev-claud").exists()
+
+
+def test_hook_goes_to_settings_preserving_the_rest(tmp_path: Path) -> None:
+    """O hook fica no settings.json do usuário: troca versões anteriores dele e não toca no resto."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    settings = system.home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    lint = {"type": "command", "command": "meu-lint"}
+    stop = [{"hooks": [{"type": "command", "command": "notificar"}]}]
+    old_venv = {"type": "command", "command": "/venv-velho/bin/python -m jev_claude hook pre-bash"}
+    on_path = {"type": "command", "command": "jev-claud hook pre-bash"}
+    before = {
+        "model": "opus",
+        "hooks": {
+            "PreToolUse": [
+                {"matcher": "Bash", "hooks": [lint, old_venv]},
+                {"matcher": "Bash", "hooks": [on_path]},
+            ],
+            "Stop": stop,
+        },
+    }
+    settings.write_text(json.dumps(before), encoding="utf-8")
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui)._check_hook() == (False, "aponta para outra instalação do jev-claud")
+
+    assert Setup(system=system, ui=ui).run("yes").results["hook"] is True
+    after = json.loads(settings.read_text(encoding="utf-8"))
+    assert after == {
+        "model": "opus",
+        "hooks": {
+            "PreToolUse": [{"matcher": "Bash", "hooks": [lint]}, {"matcher": "Bash", "hooks": [HOOK]}],
+            "Stop": stop,
+        },
+    }
+    assert Setup(system=system, ui=ui)._check_hook()[0] is True
+    Setup(system=system, ui=ui).run("yes")  # rodar de novo não duplica
+    assert json.loads(settings.read_text(encoding="utf-8")) == after
+
+
+def test_invalid_settings_are_left_alone(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    settings = system.home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("{ quebrado", encoding="utf-8")
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui).run("yes").results["hook"] is False
+    assert settings.read_text(encoding="utf-8") == "{ quebrado"
+    assert "não está no formato esperado" in out.getvalue()
 
 
 def test_everything_named_jev_claude_is_migrated(tmp_path: Path) -> None:
