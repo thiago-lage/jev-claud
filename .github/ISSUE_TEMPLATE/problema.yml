@@ -1,0 +1,39 @@
+name: Problema
+description: Algo no plugin Jevin ou no jev-claud não funciona como a documentação diz.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por avisar! Vulnerabilidades de segurança **não** vão aqui: siga o SECURITY.md.
+  - type: dropdown
+    id: parte
+    attributes:
+      label: Onde aconteceu
+      options:
+        - Plugin Jevin (skill ou subagente)
+        - Saídas de teste compactadas (hook)
+        - Servidor MCP
+        - jev-claud setup ou instalador
+        - Biblioteca Python (decide, write...)
+        - Outro
+    validations:
+      required: true
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que aconteceu.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Saída do jev-claud doctor
+      description: Rode `jev-claud doctor` e cole aqui. Ela não mostra a sua chave do Jev.
+      render: text
+  - type: input
+    id: sistema
+    attributes:
+      label: Sistema e versão do Claude Code
+      placeholder: Windows 11, Claude Code 2.1.300
