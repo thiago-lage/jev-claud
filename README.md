@@ -194,7 +194,7 @@ em todos os sistemas), e a regra global agora diz explicitamente para implementa
 
 Transparência total sobre o que acontece na sua máquina:
 
-- **Roda:** o hook executa `hooks/pre-bash.sh`, que chama `jev-claude hook pre-bash` só quando o
+- **Roda:** o hook executa `plugin/hooks/pre-bash.sh`, que chama `jev-claude hook pre-bash` só quando o
   Claude Code vai rodar um comando no Bash. Se for um teste/build/lint simples, o comando é
   reescrito para `python -m jev_claude run -- <o mesmo comando>`, que o executa, compacta a saída
   e devolve o mesmo código de saída. Nenhum outro comando é alterado.
