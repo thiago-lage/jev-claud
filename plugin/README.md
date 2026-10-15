@@ -17,6 +17,21 @@ implementando direto (edita arquivos, roda testes), e o plugin só tira o ruído
 Num teste real (`pytest -v` em um projeto com 204 testes), 214 linhas de saída viraram 65, com o
 resumo final intacto.
 
+## Instalar
+
+No Claude Code 2.1.275 ou mais novo:
+
+```text
+/plugin install jevin --marketplace thiago-lage/jev-claud
+```
+
+Em versões anteriores:
+
+```text
+/plugin marketplace add thiago-lage/jev-claud
+/plugin install jevin@jev-claud
+```
+
 ## Requisito
 
 O hook usa o pacote Python [`jev-claud`](https://pypi.org/project/jev-claud/), instalado com

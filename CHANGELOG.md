@@ -3,6 +3,14 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.1] - 2026-10-15
+
+### Corrigido
+
+- A descrição do plugin Jevin e a skill `jev` deixam claro que as ferramentas MCP vêm do
+  `jev-claud setup`, não do plugin. A skill cita o subcomando certo (`jev-claud run`), e os READMEs
+  mostram a instalação em um passo: `/plugin install jevin --marketplace thiago-lage/jev-claud`.
+
 ## [0.7.0] - 2026-10-15
 
 ### Alterado

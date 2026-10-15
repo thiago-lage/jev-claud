@@ -28,7 +28,9 @@ leia https://docs.typesafe.ai/llms.txt e confira os tipos reais em `typesafe_sdk
 
 ## 2. Poupar contexto com as ferramentas MCP `jev-claud`
 
-Use quando o volume é de **dados**, não de código que você vai editar:
+Essas ferramentas não vêm no plugin: existem quando o `jev-claud setup` registrou o servidor MCP
+`jev-claud`. Sem elas, pule esta seção. Use quando o volume é de **dados**, não de código que
+você vai editar:
 
 - `classify` / `rank`: muitos itens (um por linha) em um arquivo -> passe o CAMINHO.
   Devolve contagens e rótulos; os itens não entram no seu contexto.
@@ -44,7 +46,7 @@ e únicas (responder direto custa menos) ou gerar código (nunca).
 ## 3. Saídas compactadas
 
 O hook do plugin passa testes, builds e linters simples (`pytest`, `npm test`, `cargo build`...)
-por `jev-claud compact`. Saídas acima de ~80 linhas chegam com o começo, o fim e as linhas
+por `jev-claud run`. Saídas acima de ~80 linhas chegam com o começo, o fim e as linhas
 de erro com contexto; o rodapé `[jev-claud] saída compactada: ... completa em <caminho>`
 indica onde está a saída inteira. O código de saída é o do comando original.
 
