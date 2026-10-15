@@ -9,7 +9,7 @@
     {
       "name": "jevin",
       "source": "./plugin",
-      "description": "Saídas de teste compactadas, skill de decisões tipadas vs. texto, subagente explorador.",
+      "description": "Skill de decisões tipadas vs. texto e subagente explorador, para poupar contexto.",
       "category": "productivity"
     }
   ],

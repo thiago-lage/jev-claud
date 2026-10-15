@@ -45,8 +45,8 @@ e únicas (responder direto custa menos) ou gerar código (nunca).
 
 ## 3. Saídas compactadas
 
-O hook do plugin passa testes, builds e linters simples (`pytest`, `npm test`, `cargo build`...)
-por `jev-claud run`. Saídas acima de ~80 linhas chegam com o começo, o fim e as linhas
+Com o hook do `jev-claud setup`, testes, builds e linters simples (`pytest`, `npm test`,
+`cargo build`...) rodam por `jev-claud run`. Saídas acima de ~80 linhas chegam com o começo, o fim e as linhas
 de erro com contexto; o rodapé `[jev-claud] saída compactada: ... completa em <caminho>`
 indica onde está a saída inteira. O código de saída é o do comando original.
 

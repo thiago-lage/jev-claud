@@ -1,6 +1,6 @@
 # jev-claud
 
-[![PyPI](https://img.shields.io/pypi/v/jev-claud)](https://pypi.org/project/jev-claud/)
+[![PyPI](https://img.shields.io/pypi/v/jev-claud?label=pypi&cacheSeconds=3600)](https://pypi.org/project/jev-claud/)
 [![CI](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml)
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
@@ -96,7 +96,8 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
 | Servidor MCP | Registra o `jev-claud` no Claude Code para delegar lotes e economizar tokens. |
-| Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): saídas de teste compactadas, skill e subagente. |
+| Saídas compactadas | Grava no `~/.claude/settings.json` o hook que compacta as saídas longas de testes e builds (detalhes abaixo). |
+| Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): skill e subagente explorador. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
@@ -152,36 +153,13 @@ ferramentas também custam tokens; o Claude responde direto. E o `llama3.2` (3B)
 capaz que o Claude: use para rascunhos e resumos, e deixe o Claude revisar o que importa. A
 regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
-## Plugin do Claude Code: Jevin
+## Saídas de teste compactadas
 
-O plugin junta tudo que poupa contexto **sem mudar a qualidade da entrega**: o Claude continua
-implementando direto (edita arquivos, roda testes); o jev-claud só tira o ruído do caminho.
-
-```text
-/plugin install jevin --marketplace thiago-lage/jev-claud
-```
-
-(Claude Code 2.1.275 ou mais novo; em versões anteriores, `/plugin marketplace add
-thiago-lage/jev-claud` e depois `/plugin install jevin@jev-claud`. O `jev-claud setup` faz isso
-por você.) O hook usa o comando `jev-claud`
-(`pip install jev-claud`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
-O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava `jev-claude`: quem
-vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca marketplace, plugin e MCP
-antigos pelos novos (o comando `jev-claude` continua funcionando como atalho).
-
-| Onde | O que carrega |
-| --- | --- |
-| Claude Code | Tudo: hook, skill e subagente |
-| Cowork | Hook, skill e subagente (o hook precisa do `jev-claud` no computador) |
-| claude.ai (chat) | Só a skill |
-
-| Peça | O que faz | Custo |
-| --- | --- | --- |
-| Hook `PreToolUse` | Testes, builds e linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) rodam via `jev-claud run`: saídas acima de ~80 linhas chegam com o começo, o fim e as linhas de erro com contexto. A saída completa fica num arquivo citado no rodapé. O código de saída é o do comando original | zero (sem LLM) |
-| Skill `jev` | Ensina quando usar Jev, LLM ou código puro, e quando as ferramentas MCP compensam. Só entra no contexto quando é relevante | — |
-| Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
-
-Detalhes do hook:
+O `jev-claud setup` grava um hook `PreToolUse` no `~/.claude/settings.json`. Testes, builds e
+linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) passam a rodar via
+`jev-claud run`: saídas acima de ~80 linhas chegam ao Claude com o começo, o fim e as linhas de
+erro com contexto. A saída completa fica num arquivo citado no rodapé, e o código de saída é o
+do comando original. Custo zero: não usa LLM.
 
 - **Não aprova nada sozinho**: o comando reescrito passa pelas mesmas permissões. Na primeira
   vez o Claude Code pergunta; escolha "não perguntar de novo" para o `... -m jev_claud run`.
@@ -190,25 +168,52 @@ Detalhes do hook:
 - **Desligar**: `JEV_CLAUD_COMPACT=0` (no ambiente ou na frente de um comando).
 - Teste real (este repositório, `pytest -v`): 174 linhas viraram 64, com o resumo final intacto.
 
-O servidor MCP continua registrado pelo `setup` (com o caminho absoluto do Python, que funciona
-em todos os sistemas), e a regra global agora diz explicitamente para implementar direto.
+O hook usa o caminho absoluto do Python do jev-claud, que funciona em todos os sistemas (no
+Windows, o Claude Code roda os comandos no Git Bash). O setup preserva o resto do
+`settings.json` e não mexe nele se o arquivo não for um JSON válido.
 
-### O que o plugin roda e envia
+### O que o jev-claud roda e envia
 
 Transparência total sobre o que acontece na sua máquina:
 
-- **Roda:** o hook executa `plugin/hooks/pre-bash.sh`, que chama `jev-claud hook pre-bash` só quando o
-  Claude Code vai rodar um comando no Bash. Se for um teste/build/lint simples, o comando é
-  reescrito para `python -m jev_claud run -- <o mesmo comando>`, que o executa, compacta a saída
-  e devolve o mesmo código de saída. Nenhum outro comando é alterado.
+- **Roda:** o hook chama `python -m jev_claud hook pre-bash` só quando o Claude Code vai rodar
+  um comando no Bash. Se for um teste/build/lint simples, o comando é reescrito para
+  `python -m jev_claud run -- <o mesmo comando>`, que o executa, compacta a saída e devolve o
+  mesmo código de saída. Nenhum outro comando é alterado. O plugin Jevin não roda nada: tem só
+  texto (a skill e o subagente).
 - **Grava (só localmente, na pasta de dados do jev-claud):** a saída completa de cada comando
   compactado (`logs/`, as 20 mais recentes) e contadores de economia por mês num SQLite. Nada sai
   da sua máquina.
-- **Envia:** o plugin em si não acessa a rede. A biblioteca `jev-claud` só envia texto para a
-  API da TypeSafe (Jev) se você configurar uma chave e um orçamento, e só para o Ollama local
+- **Envia:** o hook e o plugin não acessam a rede. A biblioteca `jev-claud` só envia texto para
+  a API da TypeSafe (Jev) se você configurar uma chave e um orçamento, e só para o Ollama local
   quando usa a LLM de texto.
 - **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
   passa pelas mesmas perguntas de permissão) e não coleta telemetria.
+
+## Plugin do Claude Code: Jevin
+
+O plugin ensina o Claude a poupar contexto **sem mudar a qualidade da entrega**: o Claude
+continua implementando direto (edita arquivos, roda testes).
+
+```text
+/plugin install jevin --marketplace thiago-lage/jev-claud
+```
+
+(Claude Code 2.1.275 ou mais novo; em versões anteriores, `/plugin marketplace add
+thiago-lage/jev-claud` e depois `/plugin install jevin@jev-claud`. O `jev-claud setup` faz isso
+por você.) O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava
+`jev-claude`: quem vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca
+marketplace, plugin e MCP antigos pelos novos (o comando `jev-claude` continua funcionando como
+atalho).
+
+| Peça | O que faz | Custo |
+| --- | --- | --- |
+| Skill `jev` | Ensina quando usar Jev, LLM ou código puro, quando as ferramentas MCP compensam e como ler as saídas compactadas. Só entra no contexto quando é relevante | — |
+| Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
+
+Funciona no Claude Code e no Cowork; no claude.ai (chat), só a skill. Até a 0.7 o hook de
+compactação vinha no plugin; desde a 0.8 ele é instalado pelo `jev-claud setup` (rode-o de novo
+depois de atualizar).
 
 ## Configuração (tudo opcional)
 
