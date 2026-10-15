@@ -35,7 +35,7 @@ pytest --cov
 ## Lançando uma versão
 
 1. Atualize a versão em `pyproject.toml`, `src/jev_claude/__init__.py` e
-   `.claude-plugin/plugin.json`, e escreva a seção `## [X.Y.Z]` no `CHANGELOG.md`.
+   `plugin/.claude-plugin/plugin.json`, e escreva a seção `## [X.Y.Z]` no `CHANGELOG.md`.
 2. Com isso na `main`: **Actions -> Release -> Run workflow**, versão `X.Y.Z`.
    O workflow confere a versão, constrói e testa o wheel, cria a tag `vX.Y.Z` e o release
    com as notas do CHANGELOG, anexa os arquivos e publica no PyPI (trusted publishing;

@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "jev",
-      "source": "./",
+      "source": "./plugin",
       "description": "Saídas de teste compactadas, skill de decisões tipadas vs. texto, subagente explorador.",
       "category": "productivity"
     }

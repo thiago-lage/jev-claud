@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.2] - 2026-10-15
+
+### Alterado
+
+- O plugin foi para a pasta `plugin/` (com README e licença próprios): o diretório da Anthropic
+  analisa só o plugin, não a biblioteca e os instaladores. O marketplace aponta para
+  `./plugin`; quem já tinha o plugin instalado continua funcionando.
+- Nome de exibição do plugin: "Jev Claude". O identificador continua `jev`.
+
 ## [0.6.1] - 2026-10-15
 
 ### Alterado
