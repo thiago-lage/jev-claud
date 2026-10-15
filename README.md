@@ -1,5 +1,8 @@
 # jev-claude
 
+[![PyPI](https://img.shields.io/pypi/v/jev-claude)](https://pypi.org/project/jev-claude/)
+[![CI](https://github.com/thiago-lage/jev-claude/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claude/actions/workflows/ci.yml)
+
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
 
 `jev-claude` separa as duas saídas de IA que um app tem:
@@ -100,6 +103,7 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
 | Servidor MCP | Registra o `jev-claude` no Claude Code para delegar lotes e economizar tokens. |
+| Plugin | Instala o plugin `jev-claude@jev-claude`: saídas de teste compactadas, skill e subagente. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
@@ -109,11 +113,16 @@ jev-claude setup --check    # só verifica; sai com 1 se faltar algo essencial
 jev-claude setup --model qwen2.5:3b   # outro modelo do Ollama
 ```
 
-### Instalação manual
+### Instalação pelo PyPI
 
 ```bash
-pip install "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"
+pip install "jev-claude[jev]"    # com o SDK do Jev
+pip install jev-claude           # só o núcleo: nenhuma dependência, modo offline grátis
+jev-claude setup                 # opcional: Ollama, Claude Code, plugin e regra global
 ```
+
+Versão em desenvolvimento, direto do GitHub:
+`pip install "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"`.
 
 Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline. Prefira
 um ambiente virtual: o `typesafe-sdk` exige versões recentes de `anyio`/`h11`, que podem
