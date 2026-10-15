@@ -3,6 +3,13 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.3] - 2026-10-15
+
+### Alterado
+
+- O hook do plugin aponta direto para `hooks/pre-bash.sh` (caminho literal sob
+  `${CLAUDE_PLUGIN_ROOT}`), como pede a validação do diretório da Anthropic.
+
 ## [0.6.2] - 2026-10-15
 
 ### Alterado

@@ -5,7 +5,7 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash.sh\"", "timeout": 10 }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash.sh\"", "timeout": 10 }
         ]
       }
     ]

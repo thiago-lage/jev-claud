@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jev-claude"
-version = "0.6.2"
+version = "0.6.3"
 description = "Decisões estruturadas para o código (TypeSafe Jev) e texto livre para pessoas (LLM), com custo zero por padrão."
 readme = "README.md"
 license = "MIT"

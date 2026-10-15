@@ -1,7 +1,7 @@
 {
   "name": "jev",
   "displayName": "Jev Claude",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Poupa contexto e custo no Claude Code: saídas longas de testes e builds chegam compactadas, ferramentas MCP processam arquivos grandes fora do contexto, um subagente explora o código e devolve só a conclusão, e uma skill ensina quando usar decisões tipadas (TypeSafe Jev) ou texto (LLM).",
   "author": {
     "name": "Thiago Lage",
