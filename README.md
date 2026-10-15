@@ -199,13 +199,30 @@ O plugin ensina o Claude a poupar contexto **sem mudar a qualidade da entrega**:
 continua implementando direto (edita arquivos, roda testes). Guia completo:
 [plugin/README.md](plugin/README.md).
 
+**Pelo diretório de plugins do Claude** (assim que o Jevin for aprovado; o envio está em
+análise):
+
+1. No claude.ai ou no app desktop, abra **Personalização › Plugins**
+   ([claude.ai/customize/plugins](https://claude.ai/customize/plugins); em inglês, *Customize ›
+   Plugins*), vá na aba **Discover**, escolha **Jevin** e clique em **Add**.
+2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
+   celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
+   sozinho ao abrir, com o nome `jevin@synced`.
+
+**Pelo marketplace do projeto** (já funciona; só no Claude Code). No 2.1.275 ou mais novo:
+
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
 ```
 
-(Claude Code 2.1.275 ou mais novo; em versões anteriores, `/plugin marketplace add
-thiago-lage/jev-claud` e depois `/plugin install jevin@jev-claud`. O `jev-claud setup` faz isso
-por você.) O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava
+Em versões anteriores: `/plugin marketplace add thiago-lage/jev-claud` e depois
+`/plugin install jevin@jev-claud`.
+
+Use um caminho só. Com o Jevin do diretório ativo, a cópia do marketplace impede que ele carregue;
+o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada. Sem o diretório,
+o `setup` instala pelo marketplace.
+
+O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava
 `jev-claude`: quem vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca
 marketplace, plugin e MCP antigos pelos novos (o comando `jev-claude` continua funcionando como
 atalho).
@@ -215,7 +232,7 @@ atalho).
 | Skill `jev` | Ensina quando usar Jev, LLM ou código puro, quando as ferramentas MCP compensam e como ler as saídas compactadas. Só entra no contexto quando é relevante | — |
 | Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
 
-Funciona no Claude Code e no Cowork; no claude.ai (chat), só a skill. Até a 0.7 o hook de
+Funciona no Claude Code e no Cowork; nas conversas do claude.ai, só a skill. Até a 0.7 o hook de
 compactação vinha no plugin; desde a 0.8 ele é instalado pelo `jev-claud setup` (rode-o de novo
 depois de atualizar).
 

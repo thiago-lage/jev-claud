@@ -45,6 +45,9 @@ TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
 PLUGIN_REPO = "thiago-lage/jev-claud"
 PLUGIN_MARKETPLACE = "jev-claud"
 PLUGIN_ID = f"jevin@{PLUGIN_MARKETPLACE}"
+# Adicionado pelo diretório de plugins do Claude (claude.ai) e sincronizado no Claude Code.
+# Com ele ativo, a cópia do marketplace jev-claud impede o carregamento: fica só um dos dois.
+PLUGIN_SYNCED_ID = "jevin@synced"
 MCP_NAME = "jev-claud"
 RULE_START = "<!-- jev-claud:start -->"
 RULE_END = "<!-- jev-claud:end -->"
@@ -514,7 +517,7 @@ class Setup:
                 "Plugin Jevin no Claude Code",
                 self._check_plugin,
                 self._install_plugin,
-                "Instalar o plugin Jevin (skill e subagente explorador)?",
+                "Configurar o plugin Jevin (skill e subagente explorador)?",
                 requires=("claude",),
                 essential=False,
             ),
@@ -755,6 +758,10 @@ class Setup:
         if not path:
             return False, "precisa do Claude Code"
         code, output = self.sys.capture([path, "plugin", "list"])
+        if code == 0 and _listed(output, PLUGIN_SYNCED_ID):
+            if _listed(output, PLUGIN_ID):
+                return False, f"duplicado: o {PLUGIN_SYNCED_ID} do diretório só carrega sem o {PLUGIN_ID}"
+            return True, f"{PLUGIN_SYNCED_ID} (diretório do Claude)"
         if code != 0 or not _listed(output, PLUGIN_ID):
             old = next((name for name in OLD_PLUGIN_IDS if _listed(output, name)), None)
             if old is not None:
@@ -768,7 +775,11 @@ class Setup:
             return False
         _, output = self.sys.capture([path, "plugin", "list"])
         _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
-        if not _listed(output, PLUGIN_ID):
+        if _listed(output, PLUGIN_SYNCED_ID):
+            # Veio do diretório do Claude: a cópia do marketplace só atrapalharia.
+            if _listed(output, PLUGIN_ID) and self.sys.run([path, "plugin", "uninstall", PLUGIN_ID]) != 0:
+                return False
+        elif not _listed(output, PLUGIN_ID):
             if _listed(marketplaces, PLUGIN_MARKETPLACE):
                 self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
             elif self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
