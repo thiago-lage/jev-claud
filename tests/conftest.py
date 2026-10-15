@@ -10,15 +10,15 @@ from typing import Any
 import pytest
 from typesafe_sdk import ChoiceAnswer, NoulAnswer, ScoreAnswer
 
-from ramifica import Budget, JevBackend, Ramifica
+from jev_claude import Budget, JevBackend, JevClaude
 
 
 @pytest.fixture(autouse=True)
 def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     for name in list(os.environ):
-        if name.startswith(("RAMIFICA_", "TYPESAFE_")):
+        if name.startswith(("JEV_CLAUDE_", "TYPESAFE_")):
             monkeypatch.delenv(name)
-    monkeypatch.setenv("RAMIFICA_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("JEV_CLAUDE_HOME", str(tmp_path / "home"))
     # Porta "discard": recusa a conexão na hora, então nunca detectamos um Ollama real.
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
 
@@ -79,14 +79,14 @@ def score_answer(probabilities: list[float], legend: list[str], confidence: floa
 
 
 @pytest.fixture
-def make_ramifica() -> Callable[..., Ramifica]:
-    created: list[Ramifica] = []
+def make_jev() -> Callable[..., JevClaude]:
+    created: list[JevClaude] = []
 
-    def factory(client: FakeClient | None = None, *, budget: float = 1.0, **kwargs: Any) -> Ramifica:
+    def factory(client: FakeClient | None = None, *, budget: float = 1.0, **kwargs: Any) -> JevClaude:
         kwargs.setdefault("store", ":memory:")
         kwargs.setdefault("writer", None)
         jev = JevBackend(client=client) if client is not None else None
-        r = Ramifica(jev=jev, budget=Budget(budget), **kwargs)
+        r = JevClaude(jev=jev, budget=Budget(budget), **kwargs)
         created.append(r)
         return r
 

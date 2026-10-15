@@ -1,7 +1,7 @@
-"""ramifica — decisões tipadas para o código (TypeSafe Jev) e texto para pessoas (LLM).
+"""jev-claude — decisões tipadas para o código (TypeSafe Jev) e texto para pessoas (LLM).
 
->>> from ramifica import Ramifica, choice, noul
->>> r = Ramifica()
+>>> from jev_claude import JevClaude, choice, noul
+>>> r = JevClaude()
 >>> d = r.decide("Fui cobrado duas vezes!", {
 ...     "setor": choice("Qual setor?", {"financeiro": "cobrança, fatura", "suporte": "erro, bug"}),
 ...     "urgente": noul("A mensagem pede ação imediata?"),
@@ -10,22 +10,22 @@
 'financeiro'
 """
 
-from ramifica.backends import JevBackend, OfflineBackend
-from ramifica.budget import Budget
-from ramifica.config import Settings
-from ramifica.core import Case, Ramifica, Ranked
-from ramifica.decision import Band, Decision, Decisions, Policy
-from ramifica.errors import (
+from jev_claude.backends import JevBackend, OfflineBackend
+from jev_claude.budget import Budget
+from jev_claude.config import Settings
+from jev_claude.core import Case, JevClaude, Ranked
+from jev_claude.decision import Band, Decision, Decisions, Policy
+from jev_claude.errors import (
     BackendError,
     BudgetExceeded,
+    JevClaudeError,
     NoWriterError,
     QuestionError,
-    RamificaError,
     WriterError,
 )
-from ramifica.questions import Choice, Noul, Score, choice, noul, score
-from ramifica.store import Store
-from ramifica.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
+from jev_claude.questions import Choice, Noul, Score, choice, noul, score
+from jev_claude.store import Store
+from jev_claude.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
 
 __version__ = "0.1.0"
 
@@ -40,6 +40,8 @@ __all__ = [
     "Decision",
     "Decisions",
     "JevBackend",
+    "JevClaude",
+    "JevClaudeError",
     "NoWriterError",
     "Noul",
     "OfflineBackend",
@@ -47,8 +49,6 @@ __all__ = [
     "OpenAICompatibleWriter",
     "Policy",
     "QuestionError",
-    "Ramifica",
-    "RamificaError",
     "Ranked",
     "Score",
     "Settings",

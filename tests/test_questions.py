@@ -1,7 +1,7 @@
 import pytest
 
-from ramifica import QuestionError, choice, noul, score
-from ramifica.questions import Choice, to_wire
+from jev_claude import QuestionError, choice, noul, score
+from jev_claude.questions import Choice, to_wire
 
 
 def test_choice_from_list_has_undescribed_options() -> None:

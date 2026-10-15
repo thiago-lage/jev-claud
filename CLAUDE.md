@@ -1,4 +1,4 @@
-# ramifica — guia para agentes
+# jev-claude — guia para agentes
 
 - Python >= 3.10, layout `src/`. Núcleo sem dependências; `typesafe-sdk` só no extra `[jev]`.
 - Verificação completa: `ruff format . && ruff check . && mypy && pytest --cov`.

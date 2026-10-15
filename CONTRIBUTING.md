@@ -4,10 +4,10 @@ Obrigado por ajudar! O projeto segue três princípios:
 
 1. **O código decide com Jev, a pessoa lê com LLM.** Nada de pedir JSON para uma LLM e fazer
    parse quando uma decisão tipada resolve.
-2. **Custo zero por padrão.** Nenhuma mudança pode fazer o ramifica gastar dinheiro sem que o
+2. **Custo zero por padrão.** Nenhuma mudança pode fazer o jev-claude gastar dinheiro sem que o
    usuário tenha configurado um orçamento.
 3. **Núcleo sem dependências.** O modo offline, o cache e a escrita via LLM usam só a stdlib.
-   O `typesafe-sdk` é opcional (`ramifica[jev]`).
+   O `typesafe-sdk` é opcional (`jev-claude[jev]`).
 
 ## Ambiente
 

@@ -17,7 +17,7 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-from ramifica.errors import WriterError
+from jev_claude.errors import WriterError
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
@@ -79,7 +79,7 @@ class OllamaWriter(OpenAICompatibleWriter):
             self.host = f"http://{self.host}"
         super().__init__(
             f"{self.host}/v1",
-            model or os.environ.get("RAMIFICA_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
+            model or os.environ.get("JEV_CLAUDE_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
             timeout=timeout,
         )
 
@@ -113,16 +113,18 @@ class CallableWriter:
 def auto_writer() -> Writer | None:
     """Detecta uma LLM de texto sem custo extra de configuração.
 
-    1. `RAMIFICA_LLM_BASE_URL` + `RAMIFICA_LLM_MODEL` (+ `RAMIFICA_LLM_API_KEY` opcional)
+    1. `JEV_CLAUDE_LLM_BASE_URL` + `JEV_CLAUDE_LLM_MODEL` (+ `JEV_CLAUDE_LLM_API_KEY` opcional)
     2. Ollama rodando localmente
     3. nenhuma (o `write()` explica como configurar)
     """
-    base_url = os.environ.get("RAMIFICA_LLM_BASE_URL", "").strip()
+    base_url = os.environ.get("JEV_CLAUDE_LLM_BASE_URL", "").strip()
     if base_url:
-        model = os.environ.get("RAMIFICA_LLM_MODEL", "").strip()
+        model = os.environ.get("JEV_CLAUDE_LLM_MODEL", "").strip()
         if not model:
-            raise WriterError("Defina RAMIFICA_LLM_MODEL junto com RAMIFICA_LLM_BASE_URL.")
-        return OpenAICompatibleWriter(base_url, model, api_key=os.environ.get("RAMIFICA_LLM_API_KEY") or None)
+            raise WriterError("Defina JEV_CLAUDE_LLM_MODEL junto com JEV_CLAUDE_LLM_BASE_URL.")
+        return OpenAICompatibleWriter(
+            base_url, model, api_key=os.environ.get("JEV_CLAUDE_LLM_API_KEY") or None
+        )
     if OllamaWriter.available():
         return OllamaWriter()
     return None

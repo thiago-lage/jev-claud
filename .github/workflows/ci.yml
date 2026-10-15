@@ -50,5 +50,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e .
-      - run: ramifica doctor
-      - run: ramifica ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
+      - run: jev-claude doctor
+      - run: jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro

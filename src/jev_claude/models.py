@@ -1,6 +1,6 @@
 """Escolha do modelo Jev, com atualização automática.
 
-Especificações aceitas (argumento `model` ou `RAMIFICA_JEV_MODEL`):
+Especificações aceitas (argumento `model` ou `JEV_CLAUDE_MODEL`):
 
 - `latest` / `stable` (padrão) -> `jev-latest`: a release estável mais recente; a TypeSafe
   move o alias a cada lançamento, então você recebe updates sem mudar código.
@@ -15,11 +15,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ramifica.errors import BackendError
+from jev_claude.errors import BackendError
 
 if TYPE_CHECKING:
-    from ramifica.backends.jev import JevBackend, ModelInfo
-    from ramifica.store import Store
+    from jev_claude.backends.jev import JevBackend, ModelInfo
+    from jev_claude.store import Store
 
 ALIASES = {"latest": "jev-latest", "stable": "jev-latest", "preview": "jev-preview"}
 NEWEST_TTL_SECONDS = 24 * 3600

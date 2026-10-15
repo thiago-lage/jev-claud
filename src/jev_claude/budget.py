@@ -1,10 +1,10 @@
 """Orçamento mensal para chamadas pagas ao Jev.
 
-Padrão: US$ 0 (custo zero). Sem orçamento, o ramifica responde com o backend offline e
-avisa uma vez no log. Defina `RAMIFICA_BUDGET_USD` (ex.: `1.00`) para liberar o Jev.
+Padrão: US$ 0 (custo zero). Sem orçamento, o jev-claude responde com o backend offline e
+avisa uma vez no log. Defina `JEV_CLAUDE_BUDGET_USD` (ex.: `1.00`) para liberar o Jev.
 
 Preço de referência (docs.typesafe.ai/models, 2026-10): US$ 0,042 por milhão de tokens de
-entrada; tokens de saída são grátis. Ajuste com `RAMIFICA_JEV_USD_PER_MTOK` se mudar.
+entrada; tokens de saída são grátis. Ajuste com `JEV_CLAUDE_USD_PER_MTOK` se mudar.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ramifica.errors import BudgetExceeded
+from jev_claude.errors import BudgetExceeded
 
 USD_PER_MTOK = 0.042
 # Uma requisição mínima de uma pergunta mediu ~300 tokens de entrada nos exemplos da API:

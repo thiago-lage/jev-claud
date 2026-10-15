@@ -1,4 +1,4 @@
-"""`Ramifica`: um ponto de entrada para as duas saídas de IA de um app.
+"""`JevClaude`: um ponto de entrada para as duas saídas de IA de um app.
 
 - O **código vai ramificar** com a resposta? `decide`, `when`, `switch`, `rank` -> Jev
   (decisões tipadas; offline e grátis quando não há orçamento).
@@ -17,12 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from ramifica.backends.base import RawAnswer, RawResult
-from ramifica.backends.jev import JevBackend
-from ramifica.backends.offline import OfflineBackend
-from ramifica.budget import Budget
-from ramifica.config import DAY, Settings
-from ramifica.decision import (
+from jev_claude.backends.base import RawAnswer, RawResult
+from jev_claude.backends.jev import JevBackend
+from jev_claude.backends.offline import OfflineBackend
+from jev_claude.budget import Budget
+from jev_claude.config import DAY, Settings
+from jev_claude.decision import (
     Band,
     Decision,
     Decisions,
@@ -32,13 +32,13 @@ from ramifica.decision import (
     noul_confidence,
     score_confidence,
 )
-from ramifica.errors import BackendError, BudgetExceeded, NoWriterError
-from ramifica.models import ALIASES, resolve_model
-from ramifica.questions import Choice, Content, Noul, Question, Score, noul, to_wire
-from ramifica.store import Store
-from ramifica.writers import Writer, auto_writer
+from jev_claude.errors import BackendError, BudgetExceeded, NoWriterError
+from jev_claude.models import ALIASES, resolve_model
+from jev_claude.questions import Choice, Content, Noul, Question, Score, noul, to_wire
+from jev_claude.store import Store
+from jev_claude.writers import Writer, auto_writer
 
-logger = logging.getLogger("ramifica")
+logger = logging.getLogger("jev_claude")
 
 RELEVANCE_LEVELS: tuple[str, ...] = (
     "Irrelevante: não ajuda a responder `query`.",
@@ -76,16 +76,16 @@ class Ranked:
     decision: Decision
 
 
-class Ramifica:
+class JevClaude:
     """Roteador de saídas de IA.
 
     Args:
         jev: `JevBackend`, `None` (nunca usar Jev) ou `"auto"` (usa se houver
             `TYPESAFE_API_KEY` e `typesafe-sdk` instalado).
         writer: LLM de texto, `None` ou `"auto"` (detectada no primeiro `write`).
-        model: `latest` | `preview` | `newest` | `jev-X.Y.Z` (padrão: `RAMIFICA_JEV_MODEL` ou `latest`).
+        model: `latest` | `preview` | `newest` | `jev-X.Y.Z` (padrão: `JEV_CLAUDE_MODEL` ou `latest`).
         policy: limiares de confiança padrão.
-        budget: teto mensal para o Jev (padrão: `RAMIFICA_BUDGET_USD`, 0 = custo zero).
+        budget: teto mensal para o Jev (padrão: `JEV_CLAUDE_BUDGET_USD`, 0 = custo zero).
         store: `Store`, caminho do SQLite ou `":memory:"`.
         fallback: `"offline"` responde com o backend offline quando o Jev não pode ser usado
             (sem orçamento, fora do ar); `"raise"` levanta a exceção.
@@ -108,7 +108,7 @@ class Ramifica:
         if jev == "auto":
             jev = JevBackend() if JevBackend.key_configured() and JevBackend.sdk_available() else None
             if jev is None and JevBackend.key_configured():
-                logger.warning("TYPESAFE_API_KEY definida, mas o SDK falta: pip install 'ramifica[jev]'.")
+                logger.warning("TYPESAFE_API_KEY definida, mas o SDK falta: pip install 'jev-claude[jev]'.")
         self.jev: JevBackend | None = jev
         self._writer: Writer | Literal["auto"] | None = writer
         self.model_spec = model or self.settings.model
@@ -296,7 +296,7 @@ class Ramifica:
         if writer is None:
             raise NoWriterError(
                 "Nenhuma LLM de texto configurada. Opções gratuitas: rode o Ollama localmente "
-                "(https://ollama.com) ou defina RAMIFICA_LLM_BASE_URL e RAMIFICA_LLM_MODEL para um "
+                "(https://ollama.com) ou defina JEV_CLAUDE_LLM_BASE_URL e JEV_CLAUDE_LLM_MODEL para um "
                 "endpoint compatível com OpenAI."
             )
         if context is not None:
@@ -327,7 +327,7 @@ class Ramifica:
         return resolve_model(model or self.model_spec, backend=self.jev, store=self.store)
 
     def status(self) -> dict[str, Any]:
-        """Retrato da configuração atual (usado por `ramifica doctor`)."""
+        """Retrato da configuração atual (usado por `jev-claude doctor`)."""
         spent_usd, spent_tokens, calls = self.store.spent()
         writer = self._writer if self._writer != "auto" else None
         return {
@@ -357,7 +357,7 @@ class Ramifica:
             self.jev.close()
         self.store.close()
 
-    def __enter__(self) -> Ramifica:
+    def __enter__(self) -> JevClaude:
         return self
 
     def __exit__(self, *exc: object) -> None:

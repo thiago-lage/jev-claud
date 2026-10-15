@@ -7,9 +7,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ramifica.backends.base import RawAnswer, RawResult
-from ramifica.errors import BackendError
-from ramifica.questions import Question, to_wire
+from jev_claude.backends.base import RawAnswer, RawResult
+from jev_claude.errors import BackendError
+from jev_claude.questions import Question, to_wire
 
 DEFAULT_MODEL = "jev-latest"
 
@@ -71,7 +71,7 @@ class JevBackend:
             try:
                 from typesafe_sdk import TypeSafeClient
             except ImportError as error:
-                raise BackendError("Instale o SDK do Jev: pip install 'ramifica[jev]'") from error
+                raise BackendError("Instale o SDK do Jev: pip install 'jev-claude[jev]'") from error
             kwargs: dict[str, Any] = {}
             if self._api_key:
                 kwargs["api_key"] = self._api_key
@@ -134,4 +134,4 @@ def _convert(answer: Any) -> RawAnswer:
             confidence=float(answer.confidence),
             legend={str(k): v for k, v in answer.legend.items()},
         )
-    raise BackendError(f"Tipo de resposta não suportado pelo ramifica: {kind!r}")
+    raise BackendError(f"Tipo de resposta não suportado pelo jev-claude: {kind!r}")

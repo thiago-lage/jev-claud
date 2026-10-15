@@ -2,7 +2,7 @@
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
 
-Este repositório publica a biblioteca Python `ramifica`, que separa as duas saídas de IA que um app tem:
+`jev-claude` separa as duas saídas de IA que um app tem:
 
 | Quem consome a resposta? | Use | Motor | Por quê |
 | --- | --- | --- | --- |
@@ -13,9 +13,9 @@ Regras conhecidas, cálculos e buscas exatas continuam em código puro: a IA ent
 falta senso comum semântico.
 
 ```python
-from ramifica import Ramifica, Case, choice, noul, score
+from jev_claude import JevClaude, Case, choice, noul, score
 
-r = Ramifica()
+r = JevClaude()
 
 d = r.decide(
     ticket_text,
@@ -67,7 +67,7 @@ pip install -e ".[jev]"
 Ou direto do GitHub, depois de publicado:
 
 ```bash
-pip install "ramifica[jev] @ git+https://github.com/thiago-lage/jev-claude"
+pip install "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"
 ```
 
 Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline.
@@ -79,13 +79,13 @@ Exemplo completo, que roda sem configurar nada: [`examples/triagem_suporte.py`](
 | Variável | Padrão | Efeito |
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | — | Chave do Jev ([console](https://console.typesafe.ai/keys)). |
-| `RAMIFICA_BUDGET_USD` | `0` | Teto mensal para o Jev. `0` = custo zero (offline). Ex.: `1.00` ≈ 23 milhões de tokens de entrada. |
-| `RAMIFICA_JEV_MODEL` | `latest` | `latest` (estável, atualizado pela TypeSafe), `preview` (mais novo), `newest` (descobre e fixa a versão mais nova por 24 h) ou `jev-X.Y.Z` (fixo). |
-| `RAMIFICA_JEV_USD_PER_MTOK` | `0.042` | Preço por milhão de tokens de entrada, caso mude. |
-| `RAMIFICA_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
-| `RAMIFICA_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
-| `RAMIFICA_LLM_BASE_URL` / `RAMIFICA_LLM_MODEL` / `RAMIFICA_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
-| `RAMIFICA_OLLAMA_MODEL` / `OLLAMA_HOST` | `llama3.2` / `localhost:11434` | Ollama local, detectado automaticamente. |
+| `JEV_CLAUDE_BUDGET_USD` | `0` | Teto mensal para o Jev. `0` = custo zero (offline). Ex.: `1.00` ≈ 23 milhões de tokens de entrada. |
+| `JEV_CLAUDE_MODEL` | `latest` | `latest` (estável, atualizado pela TypeSafe), `preview` (mais novo), `newest` (descobre e fixa a versão mais nova por 24 h) ou `jev-X.Y.Z` (fixo). |
+| `JEV_CLAUDE_USD_PER_MTOK` | `0.042` | Preço por milhão de tokens de entrada, caso mude. |
+| `JEV_CLAUDE_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
+| `JEV_CLAUDE_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
+| `JEV_CLAUDE_LLM_BASE_URL` / `JEV_CLAUDE_LLM_MODEL` / `JEV_CLAUDE_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
+| `JEV_CLAUDE_OLLAMA_MODEL` / `OLLAMA_HOST` | `llama3.2` / `localhost:11434` | Ollama local, detectado automaticamente. |
 
 ## API
 
@@ -148,9 +148,9 @@ LLMs suportadas: `OllamaWriter` (local, grátis), `OpenAICompatibleWriter(base_u
 api_key=...)` e `CallableWriter(fn)` para plugar qualquer SDK:
 
 ```python
-from ramifica import CallableWriter, Ramifica
+from jev_claude import CallableWriter, JevClaude
 
-r = Ramifica(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, system)))
+r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, system)))
 ```
 
 ### Async
@@ -160,14 +160,14 @@ r = Ramifica(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, syst
 ## CLI
 
 ```bash
-ramifica doctor                       # backends ativos, modelo, orçamento, cache
-ramifica ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
-ramifica ask "Preciso disso hoje" --noul "É urgente?"
-ramifica write "Explique o plano Pro em 2 frases"
-ramifica models                       # modelos Jev disponíveis na conta
-ramifica spend                        # gastos registrados por mês
-ramifica update                       # atualiza typesafe-sdk e redescobre o modelo mais novo
-ramifica cache clear
+jev-claude doctor                       # backends ativos, modelo, orçamento, cache
+jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
+jev-claude ask "Preciso disso hoje" --noul "É urgente?"
+jev-claude write "Explique o plano Pro em 2 frases"
+jev-claude models                       # modelos Jev disponíveis na conta
+jev-claude spend                        # gastos registrados por mês
+jev-claude update                       # atualiza typesafe-sdk e redescobre o modelo mais novo
+jev-claude cache clear
 ```
 
 ## Como desenhar boas perguntas

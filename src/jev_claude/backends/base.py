@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from ramifica.decision import Kind
-from ramifica.questions import Question
+from jev_claude.decision import Kind
+from jev_claude.questions import Question
 
 
 @dataclass(frozen=True)

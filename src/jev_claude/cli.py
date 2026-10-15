@@ -1,4 +1,4 @@
-"""Linha de comando: `ramifica doctor | ask | write | models | spend | update | cache`."""
+"""Linha de comando: `jev-claude doctor | ask | write | models | spend | update | cache`."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
-from ramifica import __version__
-from ramifica.core import Ramifica
-from ramifica.errors import RamificaError
-from ramifica.models import forget_newest, resolve_model
-from ramifica.questions import Question, choice, noul, score
+from jev_claude import __version__
+from jev_claude.core import JevClaude
+from jev_claude.errors import JevClaudeError
+from jev_claude.models import forget_newest, resolve_model
+from jev_claude.questions import Question, choice, noul, score
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -23,20 +23,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
     try:
-        with Ramifica() as r:
+        with JevClaude() as r:
             result: int = args.handler(r, args)
             return result
-    except RamificaError as error:
+    except JevClaudeError as error:
         print(f"erro: {error}", file=sys.stderr)
         return 1
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ramifica",
+        prog="jev-claude",
         description="Decisões tipadas para o código (Jev) e texto para pessoas (LLM). Custo zero por padrão.",
     )
-    parser.add_argument("--version", action="version", version=f"ramifica {__version__}")
+    parser.add_argument("--version", action="version", version=f"jev-claude {__version__}")
     sub = parser.add_subparsers()
 
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
@@ -76,22 +76,22 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _doctor(r: Ramifica, args: argparse.Namespace) -> int:
+def _doctor(r: JevClaude, args: argparse.Namespace) -> int:
     status = r.status()
     if args.json:
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return 0
     jev, budget = status["jev"], status["budget"]
     writer = r.writer
-    print(f"ramifica {__version__}")
+    print(f"jev-claude {__version__}")
     print("\nDecisões (o código ramifica):")
-    print(f"  typesafe-sdk : {jev['sdk_version'] or 'não instalado  ->  pip install ramifica[jev]'}")
+    print(f"  typesafe-sdk : {jev['sdk_version'] or 'não instalado  ->  pip install jev-claude[jev]'}")
     print(f"  TYPESAFE_API_KEY : {'definida' if jev['api_key'] else 'ausente'}")
     print(f"  modelo       : {jev['model_spec']}  ->  {r.resolve_model() if r.jev else '(offline)'}")
     if jev["enabled"]:
         print(f"  backend      : Jev (teto US$ {budget['monthly_usd']:.2f}/mês)")
     elif r.jev is not None:
-        print("  backend      : offline  (modo custo zero: defina RAMIFICA_BUDGET_USD para liberar o Jev)")
+        print("  backend      : offline  (modo custo zero: defina JEV_CLAUDE_BUDGET_USD para liberar o Jev)")
     else:
         print("  backend      : offline  (grátis, heurística local)")
     print(
@@ -106,19 +106,19 @@ def _doctor(r: Ramifica, args: argparse.Namespace) -> int:
 
 def _describe_writer(writer: Any) -> str:
     if writer is None:
-        return "nenhuma  (rode o Ollama ou defina RAMIFICA_LLM_BASE_URL + RAMIFICA_LLM_MODEL)"
+        return "nenhuma  (rode o Ollama ou defina JEV_CLAUDE_LLM_BASE_URL + JEV_CLAUDE_LLM_MODEL)"
     model = getattr(writer, "model", "")
     base = getattr(writer, "base_url", "")
     return f"{writer.name} {model} {base}".strip()
 
 
-def _ask(r: Ramifica, args: argparse.Namespace) -> int:
+def _ask(r: JevClaude, args: argparse.Namespace) -> int:
     question: Question
     if args.noul:
         question = noul(args.noul)
     elif args.choice:
         if not args.option:
-            raise RamificaError("--choice precisa de pelo menos um --option.")
+            raise JevClaudeError("--choice precisa de pelo menos um --option.")
         options: dict[str, str | None] = {}
         for raw in args.option:
             label, _, description = raw.partition("=")
@@ -136,20 +136,20 @@ def _ask(r: Ramifica, args: argparse.Namespace) -> int:
     return 0
 
 
-def _write(r: Ramifica, args: argparse.Namespace) -> int:
+def _write(r: JevClaude, args: argparse.Namespace) -> int:
     print(r.write(args.prompt, system=args.system))
     return 0
 
 
-def _models(r: Ramifica, args: argparse.Namespace) -> int:
+def _models(r: JevClaude, args: argparse.Namespace) -> int:
     if r.jev is None:
-        raise RamificaError("Jev indisponível: defina TYPESAFE_API_KEY e instale ramifica[jev].")
+        raise JevClaudeError("Jev indisponível: defina TYPESAFE_API_KEY e instale jev-claude[jev].")
     for info in r.jev.list_models():
         print(f"{info.name:<16} {info.release_date}  {info.description}")
     return 0
 
 
-def _spend(r: Ramifica, args: argparse.Namespace) -> int:
+def _spend(r: JevClaude, args: argparse.Namespace) -> int:
     rows = r.store.ledger()
     if not rows:
         print("Nenhum gasto registrado. Custo zero até aqui.")
@@ -159,7 +159,7 @@ def _spend(r: Ramifica, args: argparse.Namespace) -> int:
     return 0
 
 
-def _update(r: Ramifica, args: argparse.Namespace) -> int:
+def _update(r: JevClaude, args: argparse.Namespace) -> int:
     command = [sys.executable, "-m", "pip", "install", "--upgrade", "typesafe-sdk"]
     print("$ " + " ".join(command))
     if not args.dry_run:
@@ -170,11 +170,11 @@ def _update(r: Ramifica, args: argparse.Namespace) -> int:
     if r.jev is not None:
         newest = resolve_model("newest", backend=r.jev, store=r.store)
         print(f"Modelo Jev mais novo disponível: {newest}")
-    print("Dica: RAMIFICA_JEV_MODEL=latest segue a release estável automaticamente.")
+    print("Dica: JEV_CLAUDE_MODEL=latest segue a release estável automaticamente.")
     return 0
 
 
-def _cache(r: Ramifica, args: argparse.Namespace) -> int:
+def _cache(r: JevClaude, args: argparse.Namespace) -> int:
     if args.action == "clear":
         print(f"{r.store.clear_cache()} decisões removidas do cache.")
     else:

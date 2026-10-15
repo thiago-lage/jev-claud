@@ -1,7 +1,7 @@
 import pytest
 
-from ramifica import OfflineBackend, choice, noul, score
-from ramifica.backends.offline import features, resolve_path
+from jev_claude import OfflineBackend, choice, noul, score
+from jev_claude.backends.offline import features, resolve_path
 
 
 @pytest.fixture
@@ -39,9 +39,9 @@ def test_noul_with_described_outcomes(offline: OfflineBackend) -> None:
 
 
 def test_noul_without_evidence_means_no() -> None:
-    from ramifica import Ramifica
+    from jev_claude import JevClaude
 
-    with Ramifica(store=":memory:", writer=None) as r:
+    with JevClaude(store=":memory:", writer=None) as r:
         decision = r.ask("bom dia", noul("Fala de reembolso?"))
     assert decision.yes is False
     assert decision.uncertain

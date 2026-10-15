@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from ramifica import OllamaWriter, OpenAICompatibleWriter, WriterError
-from ramifica.writers import auto_writer
+from jev_claude import OllamaWriter, OpenAICompatibleWriter, WriterError
+from jev_claude.writers import auto_writer
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -90,9 +90,9 @@ def test_ollama_detection_and_defaults(server: str, monkeypatch: pytest.MonkeyPa
 
 def test_auto_writer_prefers_explicit_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     assert auto_writer() is None
-    monkeypatch.setenv("RAMIFICA_LLM_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("JEV_CLAUDE_LLM_BASE_URL", "http://localhost:1234/v1")
     with pytest.raises(WriterError):
         auto_writer()
-    monkeypatch.setenv("RAMIFICA_LLM_MODEL", "qwen")
+    monkeypatch.setenv("JEV_CLAUDE_LLM_MODEL", "qwen")
     writer = auto_writer()
     assert isinstance(writer, OpenAICompatibleWriter) and writer.model == "qwen"

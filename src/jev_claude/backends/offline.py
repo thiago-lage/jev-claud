@@ -16,9 +16,9 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from ramifica.backends.base import RawAnswer, RawResult
-from ramifica.decision import choice_confidence, score_confidence
-from ramifica.questions import Choice, Noul, Question, Score
+from jev_claude.backends.base import RawAnswer, RawResult
+from jev_claude.decision import choice_confidence, score_confidence
+from jev_claude.questions import Choice, Noul, Question, Score
 
 MODEL_NAME = "offline-lexical-1"
 

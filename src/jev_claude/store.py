@@ -38,14 +38,14 @@ CREATE TABLE IF NOT EXISTS meta (
 
 
 def default_home() -> Path:
-    """Diretório de dados: `RAMIFICA_HOME`, ou o cache do usuário no sistema operacional."""
-    configured = os.environ.get("RAMIFICA_HOME", "").strip()
+    """Diretório de dados: `JEV_CLAUDE_HOME`, ou o cache do usuário no sistema operacional."""
+    configured = os.environ.get("JEV_CLAUDE_HOME", "").strip()
     if configured:
         return Path(configured).expanduser()
     if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
-        return Path(os.environ["LOCALAPPDATA"]) / "ramifica"
+        return Path(os.environ["LOCALAPPDATA"]) / "jev-claude"
     xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
-    return (Path(xdg) if xdg else Path.home() / ".cache") / "ramifica"
+    return (Path(xdg) if xdg else Path.home() / ".cache") / "jev-claude"
 
 
 def current_month() -> str:
@@ -57,7 +57,7 @@ class Store:
 
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
-            path = default_home() / "ramifica.sqlite3"
+            path = default_home() / "jev_claude.sqlite3"
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)

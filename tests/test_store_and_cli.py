@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from ramifica import Store
-from ramifica.cli import main
+from jev_claude import Store
+from jev_claude.cli import main
 
 
 def test_store_cache_roundtrip_and_expiry(tmp_path: object) -> None:
