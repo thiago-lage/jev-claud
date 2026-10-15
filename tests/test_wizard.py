@@ -49,6 +49,7 @@ class FakeSystem(System):
             "mcp": mcp,
             "plugin": plugin,
             "jev_marketplace": False,
+            "old_plugin": False,
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -77,7 +78,9 @@ class FakeSystem(System):
         elif command[1:4] == ["plugin", "marketplace", "add"]:
             self.state["jev_marketplace" if command[4] == "thiago-lage/jev-claude" else "marketplace"] = True
         elif command[1:3] == ["plugin", "install"]:
-            self.state["plugin" if command[3] == "jev-claude@jev-claude" else "skill"] = True
+            self.state["plugin" if command[3] == "jev@jev-claude" else "skill"] = True
+        elif command[1:3] == ["plugin", "uninstall"]:
+            self.state["old_plugin"] = False
         elif command[1:3] == ["mcp", "add"]:
             self.state["mcp"] = True
         elif "typesafe-sdk" in command:
@@ -90,7 +93,11 @@ class FakeSystem(System):
         if list(command[1:3]) == ["plugin", "list"]:
             installed = [
                 name
-                for name, key in (("typesafe@typesafe-ai", "skill"), ("jev-claude@jev-claude", "plugin"))
+                for name, key in (
+                    ("typesafe@typesafe-ai", "skill"),
+                    ("jev@jev-claude", "plugin"),
+                    ("jev-claude@jev-claude", "old_plugin"),
+                )
                 if self.state[key]
             ]
             return 0, "\n".join(installed) + "\n" if installed else "Nenhum plugin\n"
@@ -178,7 +185,7 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
     assert "/bin/claude plugin install typesafe@typesafe-ai" in commands
     assert "/bin/claude mcp add -s user jev-claude -- python -m jev_claude mcp" in commands
     assert "/bin/claude plugin marketplace add thiago-lage/jev-claude" in commands
-    assert "/bin/claude plugin install jev-claude@jev-claude" in commands
+    assert "/bin/claude plugin install jev@jev-claude" in commands
     shim = (system.home / ".local" / "bin" / "jev-claude").read_bytes()
     assert shim == b'#!/bin/sh\nexec "python" -m jev_claude "$@"\n'
     assert system.spawned == [["/bin/ollama", "serve"]]
@@ -412,3 +419,16 @@ def test_plugin_shim_only_on_windows(tmp_path: Path) -> None:
     report = Setup(system=system, ui=ui).run("yes")
     assert report.results["plugin"] is True
     assert not (system.home / ".local" / "bin" / "jev-claude").exists()
+
+
+def test_plugin_renamed_from_jev_claude_is_migrated(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(old_plugin=True, jev_marketplace=True)
+    ui, out = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    commands = [" ".join(c) for c in system.commands]
+    assert "nome antigo (jev-claude)" in out.getvalue()
+    assert "/bin/claude plugin marketplace update jev-claude" in commands
+    assert "/bin/claude plugin install jev@jev-claude" in commands
+    assert "/bin/claude plugin uninstall jev-claude@jev-claude" in commands
+    assert report.results["plugin"] is True and system.state["old_plugin"] is False

@@ -3,6 +3,19 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.1] - 2026-10-15
+
+### Alterado
+
+- O plugin do Claude Code passa a se chamar **`jev`** (exibido como "Jev"), para o diretório de
+  plugins da Anthropic, que não aceita nomes que lembrem a marca. O pacote e o comando continuam
+  `jev-claude`. O marketplace migra quem tinha `jev-claude@jev-claude` (`renames`), e o
+  `jev-claude setup` instala o `jev@jev-claude` e remove o antigo.
+- O hook roda por `hooks/pre-bash.sh`, que não faz nada se o `jev-claude` não estiver instalado
+  (antes, um erro a cada comando).
+- Manifesto com ícone (o mascote), links de documentação, suporte e privacidade. README descreve
+  tudo o que o plugin roda, grava e envia. `CLAUDE.md` do projeto foi para `.claude/CLAUDE.md`.
+
 ## [0.6.0] - 2026-10-15
 
 ### Adicionado

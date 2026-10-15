@@ -1,10 +1,11 @@
 {
-  "name": "jev-claude",
-  "displayName": "Jev Claude",
-  "version": "0.6.0",
-  "description": "Poupa contexto e custo no Claude Code: saídas de testes/builds compactadas, ferramentas MCP que processam arquivos grandes fora do contexto, subagente explorador e a regra Jev (código ramifica) vs. LLM (pessoa lê).",
+  "name": "jev",
+  "displayName": "Jev",
+  "version": "0.6.1",
+  "description": "Poupa contexto e custo no Claude Code: saídas longas de testes e builds chegam compactadas, ferramentas MCP processam arquivos grandes fora do contexto, um subagente explora o código e devolve só a conclusão, e uma skill ensina quando usar decisões tipadas (TypeSafe Jev) ou texto (LLM).",
   "author": {
-    "name": "Thiago Lage"
+    "name": "Thiago Lage",
+    "url": "https://github.com/thiago-lage"
   },
   "homepage": "https://github.com/thiago-lage/jev-claude#readme",
   "repository": "https://github.com/thiago-lage/jev-claude",
@@ -16,5 +17,9 @@
     "context",
     "tokens",
     "mcp"
-  ]
+  ],
+  "icon": "./docs/icon.png",
+  "documentationUrl": "https://github.com/thiago-lage/jev-claude#plugin-do-claude-code",
+  "supportUrl": "https://github.com/thiago-lage/jev-claude/issues",
+  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claude#o-que-o-plugin-roda-e-envia"
 }

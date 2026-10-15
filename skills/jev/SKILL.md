@@ -3,7 +3,7 @@ name: jev
 description: Quando o código que você escreve usa IA (decisão tipada com TypeSafe Jev vs. texto com LLM), ou quando há arquivos de dados grandes (CSV, logs, listas, relatórios) para classificar, ranquear ou resumir sem lê-los no contexto. Também para saídas de teste/build compactadas pelo jev-claude.
 ---
 
-# jev-claude: decisões tipadas, texto barato e contexto enxuto
+# Jev: decisões tipadas, texto barato e contexto enxuto
 
 Esta skill **não muda como você trabalha**: pedidos de mudança em código você implementa
 direto, editando os arquivos e rodando os testes. Nunca delegue código ao Ollama ou ao Jev.
@@ -54,4 +54,4 @@ indica onde está a saída inteira. O código de saída é o do comando original
 ## 4. Explorar sem encher o contexto
 
 Para perguntas amplas sobre o código ("onde X é tratado?", "como Y funciona?") que exigiriam
-ler muitos arquivos, delegue ao subagente `jev-claude:scout`: só a conclusão volta.
+ler muitos arquivos, delegue ao subagente `jev:scout`: só a conclusão volta.
