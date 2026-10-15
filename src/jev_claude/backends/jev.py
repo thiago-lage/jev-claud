@@ -7,8 +7,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from jev_claude import media
 from jev_claude.backends.base import RawAnswer, RawResult
-from jev_claude.errors import BackendError
+from jev_claude.errors import BackendError, QuestionError
 from jev_claude.questions import Question, to_wire
 
 DEFAULT_MODEL = "jev-latest"
@@ -86,9 +87,17 @@ class JevBackend:
         return self._client
 
     def evaluate(self, state: Any, questions: Mapping[str, Question], *, model: str | None) -> RawResult:
+        raw_wire = to_wire(questions)
+        known = media.collect(state, raw_wire)  # antes de trocar: mantém as imagens vivas
+        wire = media.replace_images(raw_wire)
+        plain_state = media.replace_images(state)
+        kwargs: dict[str, Any] = {"state": plain_state, "questions": wire, "model": model}
+        refs = media.references(plain_state, wire)
         try:
-            response = self.client.system_one(state=state, questions=to_wire(questions), model=model)
-        except BackendError:
+            if refs:
+                kwargs["assets"] = self._assets(media.resolve(refs, known))
+            response = self.client.system_one(**kwargs)
+        except (BackendError, QuestionError):
             raise
         except Exception as error:
             raise BackendError(f"Jev falhou: {error}") from error
@@ -99,6 +108,15 @@ class JevBackend:
             model=getattr(response, "model", None),
             input_tokens=getattr(usage, "input_tokens", None),
         )
+
+    @staticmethod
+    def _assets(images: Mapping[str, media.Image]) -> dict[str, Any]:
+        """Referência -> `typesafe_sdk.Image`. O SDK troca cada referência pela imagem."""
+        try:
+            from typesafe_sdk import Image as SdkImage
+        except ImportError as error:
+            raise BackendError("Imagens exigem o SDK do Jev: pip install 'jev-claude[jev]'") from error
+        return {ref: SdkImage(image.data) for ref, image in images.items()}
 
     def list_models(self) -> list[ModelInfo]:
         try:
@@ -133,5 +151,13 @@ def _convert(answer: Any) -> RawAnswer:
             probabilities={str(k): float(v) for k, v in answer.probabilities.items()},
             confidence=float(answer.confidence),
             legend={str(k): v for k, v in answer.legend.items()},
+        )
+    if kind == "box":
+        box = answer.box
+        confidence = getattr(answer, "confidence", None)
+        return RawAnswer(
+            kind="box",
+            value={side: float(getattr(box, side)) for side in ("top", "left", "bottom", "right")},
+            confidence=None if confidence is None else float(confidence),
         )
     raise BackendError(f"Tipo de resposta não suportado pelo jev-claude: {kind!r}")

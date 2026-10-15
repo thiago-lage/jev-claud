@@ -17,6 +17,12 @@ direto, editando os arquivos e rodando os testes. Nunca delegue código ao Ollam
 | segue regra conhecida, cálculo ou busca exata | **código puro** | sem IA |
 
 Não peça JSON a uma LLM para depois fazer parse: isso é o que o Jev resolve.
+
+Com orçamento, o padrão é a **cascata**: o offline grátis responde o óbvio e só o incerto vai
+ao Jev (`d.source == "mixed"`, `d.escalated`). Descreva cada opção com os termos reais dos dados:
+mais perguntas saem de graça. Imagens: `Image("foto.jpg")` no estado e `box("Onde está X?")`
+para localizar algo (exigem o Jev com modelo de visão).
+
 O Jev é pago por uso; o padrão é orçamento US$ 0 (modo offline grátis). Ao integrar,
 leia https://docs.typesafe.ai/llms.txt e confira os tipos reais em `typesafe_sdk`.
 

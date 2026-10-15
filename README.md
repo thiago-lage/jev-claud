@@ -47,6 +47,9 @@ resposta = r.write("Escreva uma resposta curta e empática para o cliente.", con
   juntas em `decide` e rodam em paralelo no Jev: o custo fixo da requisição é pago uma vez.
 - **Saída não custa.** O Jev cobra só tokens de entrada (US$ 0,042 por milhão em 2026-10);
   a resposta é um valor tipado, não texto gerado.
+- **Cascata.** Com o Jev ligado, cada pergunta passa primeiro pelo modo offline grátis; só as
+  que ele não resolve com confiança (padrão: >= 0,8) vão ao Jev, todas numa requisição. O
+  óbvio sai de graça, o difícil continua com o Jev. Veja [Cascata](#cascata-pague-só-pelo-difícil).
 - **Cache local.** A mesma pergunta sobre o mesmo estado no mesmo modelo sai do SQLite,
   de graça (`source == "cache"`).
 - **Orçamento com teto.** Padrão: **US$ 0/mês**. Sem orçamento, tudo roda no backend
@@ -188,6 +191,8 @@ têm prioridade sobre o arquivo.
 | `JEV_CLAUDE_BUDGET_USD` | `0` | Teto mensal para o Jev. `0` = custo zero (offline). Ex.: `1.00` ≈ 23 milhões de tokens de entrada. |
 | `JEV_CLAUDE_MODEL` | `latest` | `latest` (estável, atualizado pela TypeSafe), `preview` (mais novo), `newest` (descobre e fixa a versão mais nova por 24 h) ou `jev-X.Y.Z` (fixo). |
 | `JEV_CLAUDE_USD_PER_MTOK` | `0.042` | Preço por milhão de tokens de entrada, caso mude. |
+| `JEV_CLAUDE_STRATEGY` | `cascade` | `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev). |
+| `JEV_CLAUDE_CASCADE_ACCEPT` | `0.8` | Confiança mínima para aceitar a resposta offline. Suba para escalar mais ao Jev. |
 | `JEV_CLAUDE_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
 | `JEV_CLAUDE_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
 | `JEV_CLAUDE_LLM_BASE_URL` / `JEV_CLAUDE_LLM_MODEL` / `JEV_CLAUDE_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
@@ -243,6 +248,54 @@ r.switch(
 for hit in r.rank("como cancelar a assinatura", documentos, top_k=3):
     print(hit.score, hit.item)
 ```
+
+### Cascata: pague só pelo difícil
+
+Com a chave e o orçamento do Jev configurados, `decide` (e `when`, `switch`, `rank`) segue:
+
+```
+1. cache local        mesma pergunta + mesmo estado + mesmo modelo  -> grátis
+2. offline            confiança >= JEV_CLAUDE_CASCADE_ACCEPT (0,8)  -> grátis
+3. Jev (System One)   só as perguntas incertas, numa requisição     -> pago
+4. sua Policy         confiança baixa até no Jev -> Band.LOW -> humano/padrão
+```
+
+```python
+d = r.decide(ticket, {"setor": setor, "urgente": urgente})
+d.source          # "offline", "jev", "cache" ou "mixed" (parte offline, parte Jev)
+d.escalated       # ("urgente",): o que foi ao Jev
+d["setor"].source # de onde veio cada resposta
+```
+
+- O modo offline é conservador: só fica confiante quando o texto tem os termos das opções.
+  Descreva cada opção com as palavras que aparecem nos dados reais e mais coisas saem grátis.
+- `rank` nunca mistura notas offline e do Jev (não são comparáveis): ou tudo offline, ou tudo no Jev.
+- Imagens e `box` vão sempre ao Jev (o offline não enxerga imagens).
+- `JEV_CLAUDE_STRATEGY=jev` (ou `JevClaude(strategy="jev")`) manda tudo ao Jev, como antes.
+- `jev-claude spend` mostra quantas perguntas cada camada respondeu e a economia estimada.
+
+### Imagens (System One com visão)
+
+```python
+from jev_claude import Image, box, noul
+
+foto = Image("devolucao_123.jpg")             # caminho ou bytes (PNG/JPEG)
+d = r.decide(
+    {"pedido": "#123", "foto": foto},         # a imagem pode ir no estado, em listas...
+    {
+        "danificado": noul("O produto chegou danificado?"),
+        "onde": box("Onde está o dano?"),     # Box: localiza algo na imagem
+    },
+)
+if d["danificado"].yes and d["danificado"].confident:
+    x0, y0, x1, y1 = d["onde"].region.to_pixels(largura, altura)  # pronto para o Pillow
+
+r.when(f"Comparando {foto} com {Image('original.jpg')}", "A peça foi trocada?")  # ...ou no texto
+```
+
+Exigem o Jev com um modelo de visão (`JEV_CLAUDE_MODEL`). A imagem é enviada como anexo; o
+custo estimado é ~1.500 tokens por imagem. Pela CLI:
+`jev-claude ask --image foto.jpg --box "Onde está o dano?"`.
 
 ### Texto (uma pessoa lê)
 

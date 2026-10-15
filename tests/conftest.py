@@ -44,8 +44,10 @@ class FakeClient:
         self.models = SimpleNamespace(list=lambda: SimpleNamespace(models=tuple(listed)))
         self.closed = False
 
-    def system_one(self, *, state: Any, questions: Mapping[str, Any], model: str | None = None) -> Any:
-        self.calls.append({"state": state, "questions": questions, "model": model})
+    def system_one(
+        self, *, state: Any, questions: Mapping[str, Any], model: str | None = None, assets: Any = None
+    ) -> Any:
+        self.calls.append({"state": state, "questions": questions, "model": model, "assets": assets})
         if self.error is not None:
             raise self.error
         answers = self.answers(questions) if callable(self.answers) else self.answers
@@ -85,6 +87,7 @@ def make_jev() -> Callable[..., JevClaude]:
     def factory(client: FakeClient | None = None, *, budget: float = 1.0, **kwargs: Any) -> JevClaude:
         kwargs.setdefault("store", ":memory:")
         kwargs.setdefault("writer", None)
+        kwargs.setdefault("strategy", "jev")  # testes da cascata pedem strategy="cascade"
         jev = JevBackend(client=client) if client is not None else None
         r = JevClaude(jev=jev, budget=Budget(budget), **kwargs)
         created.append(r)

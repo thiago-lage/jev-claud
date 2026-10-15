@@ -18,6 +18,7 @@ from typing import Any
 
 from jev_claude.backends.base import RawAnswer, RawResult
 from jev_claude.decision import choice_confidence, score_confidence
+from jev_claude.errors import BackendError
 from jev_claude.questions import Choice, Noul, Question, Score
 
 MODEL_NAME = "offline-lexical-1"
@@ -56,6 +57,8 @@ class OfflineBackend:
             return _noul(state_features, question)
         if isinstance(question, Score):
             return _score(state, state_features, question)
+        if getattr(question, "kind", None) == "box":
+            raise BackendError("Box exige o Jev (modelo de visão): o modo offline não enxerga imagens.")
         raise TypeError(f"Pergunta não suportada: {type(question).__name__}")
 
     def relevance(self, query: Any, text: Any) -> float:

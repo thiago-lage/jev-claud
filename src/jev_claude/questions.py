@@ -4,7 +4,8 @@ Cada pergunta vira exatamente um primitivo do TypeSafe System One:
 
 - `Choice` (escolha uma opção de um conjunto definido),
 - `Noul` (probabilidade de uma condição ser verdadeira),
-- `Score` (posição ao longo de níveis ordenados).
+- `Score` (posição ao longo de níveis ordenados),
+- `Box` (onde algo está numa imagem; exige um modelo de visão do Jev).
 
 As instruções e critérios podem ser texto, objetos JSON ou listas, como na API.
 """
@@ -87,7 +88,26 @@ class Score:
         return {"type": "score", "instructions": self.instructions, "criteria": list(self.levels)}
 
 
-Question: TypeAlias = "Choice | Noul | Score"
+@dataclass(frozen=True)
+class Box:
+    """Localiza algo numa imagem. A resposta é uma `Region` com as bordas em frações (0 a 1).
+
+    Só o Jev responde (modelo de visão); o modo offline não enxerga imagens.
+    """
+
+    instructions: Content
+
+    kind = "box"
+
+    def __post_init__(self) -> None:
+        if not self.instructions:
+            raise QuestionError("Box precisa de instruções (o que localizar na imagem).")
+
+    def to_wire(self) -> dict[str, Any]:
+        return {"type": "box", "instructions": self.instructions}
+
+
+Question: TypeAlias = "Choice | Noul | Score | Box"
 
 
 def choice(instructions: Content, options: Mapping[str, Content | None] | Sequence[str]) -> Choice:
@@ -112,6 +132,11 @@ def score(instructions: Content, levels: Sequence[Content]) -> Score:
     if isinstance(levels, (str, bytes)):
         raise QuestionError("levels deve ser uma lista de níveis, não uma string.")
     return Score(instructions, list(levels))
+
+
+def box(instructions: Content) -> Box:
+    """Atalho para `Box`."""
+    return Box(instructions)
 
 
 def to_wire(questions: Mapping[str, Question]) -> dict[str, dict[str, Any]]:

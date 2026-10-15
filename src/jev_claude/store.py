@@ -29,6 +29,13 @@ CREATE TABLE IF NOT EXISTS ledger (
     input_tokens INTEGER NOT NULL DEFAULT 0,
     calls INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS routing (
+    month TEXT NOT NULL,
+    layer TEXT NOT NULL,
+    decisions INTEGER NOT NULL DEFAULT 0,
+    saved_tokens INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (month, layer)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
@@ -131,6 +138,33 @@ class Store:
                 "SELECT month, usd, input_tokens, calls FROM ledger ORDER BY month"
             ).fetchall()
         return [(str(m), float(u), int(t), int(c)) for m, u, t, c in rows]
+
+    # -- roteamento (quem respondeu cada pergunta) -----------------------------
+
+    def record_routing(
+        self, layer: str, decisions: int, saved_tokens: int = 0, month: str | None = None
+    ) -> None:
+        if decisions <= 0:
+            return
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO routing (month, layer, decisions, saved_tokens) VALUES (?, ?, ?, ?)
+                ON CONFLICT(month, layer) DO UPDATE SET
+                    decisions = decisions + excluded.decisions,
+                    saved_tokens = saved_tokens + excluded.saved_tokens
+                """,
+                (month or current_month(), layer, decisions, max(0, saved_tokens)),
+            )
+
+    def routing(self, month: str | None = None) -> dict[str, tuple[int, int]]:
+        """Camada -> (perguntas respondidas, tokens do Jev economizados) no mês."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT layer, decisions, saved_tokens FROM routing WHERE month = ?",
+                (month or current_month(),),
+            ).fetchall()
+        return {str(layer): (int(n), int(saved)) for layer, n, saved in rows}
 
     # -- metadados -----------------------------------------------------------
 

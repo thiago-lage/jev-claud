@@ -11,8 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
-Kind = Literal["choice", "noul", "score"]
-Source = Literal["jev", "offline", "cache"]
+Kind = Literal["choice", "noul", "score", "box"]
+Source = Literal["jev", "offline", "cache", "mixed"]
+"""De onde veio a resposta. `mixed`: na cascata, parte offline e parte no Jev."""
 
 
 class Band(str, Enum):
@@ -87,17 +88,58 @@ def _clamp(value: float) -> float:
 
 
 @dataclass(frozen=True)
+class Region:
+    """Retângulo numa imagem, com as bordas em frações da altura/largura (0 a 1)."""
+
+    top: float
+    left: float
+    bottom: float
+    right: float
+
+    @property
+    def width(self) -> float:
+        return max(0.0, self.right - self.left)
+
+    @property
+    def height(self) -> float:
+        return max(0.0, self.bottom - self.top)
+
+    @property
+    def area(self) -> float:
+        """Fração da imagem coberta (0 a 1)."""
+        return self.width * self.height
+
+    @property
+    def center(self) -> tuple[float, float]:
+        """(x, y) do centro, em frações."""
+        return ((self.left + self.right) / 2, (self.top + self.bottom) / 2)
+
+    def to_pixels(self, width: int, height: int) -> tuple[int, int, int, int]:
+        """(x0, y0, x1, y1) em pixels, no formato do Pillow (`ImageDraw.rectangle`, `crop`)."""
+        return (
+            round(self.left * width),
+            round(self.top * height),
+            round(self.right * width),
+            round(self.bottom * height),
+        )
+
+    def as_dict(self) -> dict[str, float]:
+        return {"top": self.top, "left": self.left, "bottom": self.bottom, "right": self.right}
+
+
+@dataclass(frozen=True)
 class Decision:
     """Uma resposta tipada pronta para `if`/`match`.
 
     - choice: `value` é o rótulo escolhido (str)
     - noul: `value` é `p > 0.5` (bool; sem evidência = não) e `probability` é p(sim)
     - score: `value` é o grau esperado (float, pode cair entre níveis) e `level` o nível mais provável
+    - box: `value` é uma `Region`; sem confiança informada pelo modelo, a faixa é MEDIUM
     """
 
     name: str
     kind: Kind
-    value: str | bool | float
+    value: str | bool | float | Region
     confidence: float
     band: Band
     probabilities: Mapping[Any, float]
@@ -134,13 +176,31 @@ class Decision:
         """Para Score: `True` se o grau esperado é >= `level`."""
         if self.kind != "score":
             raise TypeError(f"Decision {self.name!r} é {self.kind}, não score.")
-        return float(self.value) >= level
+        return self.number >= level
+
+    @property
+    def number(self) -> float:
+        """O valor como número (score: grau esperado; noul: p(sim); choice: probabilidade escolhida)."""
+        if isinstance(self.value, Region):
+            raise TypeError(f"Decision {self.name!r} é box: use `region`.")
+        if isinstance(self.value, str):
+            return float(self.probability or 0.0)
+        if self.kind == "noul":
+            return float(self.probability if self.probability is not None else self.value)
+        return float(self.value)
+
+    @property
+    def region(self) -> Region:
+        """Para Box: a região encontrada."""
+        if not isinstance(self.value, Region):
+            raise TypeError(f"Decision {self.name!r} é {self.kind}, não box.")
+        return self.value
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "kind": self.kind,
-            "value": self.value,
+            "value": self.value.as_dict() if isinstance(self.value, Region) else self.value,
             "confidence": round(self.confidence, 6),
             "band": self.band.value,
             "probability": self.probability,
@@ -160,6 +220,8 @@ class Decisions(Mapping[str, Decision]):
     model: str | None = None
     input_tokens: int | None = None
     cost_usd: float = 0.0
+    escalated: tuple[str, ...] = ()
+    """Na cascata: perguntas que o offline não resolveu com segurança e foram ao Jev."""
 
     def __getitem__(self, name: str) -> Decision:
         return self.items_[name]
@@ -180,5 +242,6 @@ class Decisions(Mapping[str, Decision]):
             "model": self.model,
             "input_tokens": self.input_tokens,
             "cost_usd": self.cost_usd,
+            "escalated": list(self.escalated),
             "decisions": {name: decision.as_dict() for name, decision in self.items_.items()},
         }

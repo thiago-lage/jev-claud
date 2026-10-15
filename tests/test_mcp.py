@@ -98,7 +98,7 @@ def test_tool_errors_are_reported_to_the_model(server: Server) -> None:
     result = call(
         server, "decide", {"state": "x", "questions": {"q": {"type": "talvez", "instructions": "?"}}}
     )
-    assert result["isError"] is True and "choice, noul ou score" in result["content"][0]["text"]
+    assert result["isError"] is True and "choice, noul, score ou box" in result["content"][0]["text"]
     assert call(server, "classify", {"file": "nao/existe.txt", "instructions": "?", "options": {"a": None}})[
         "isError"
     ]
