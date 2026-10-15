@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Literal, TextIO
 
 from jev_claud import mascot
-from jev_claud.compact import hook_command
+from jev_claud.compact import HOOK_MATCHER, hook_command
 from jev_claud.config import config_path, load_config, save_config
 from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
@@ -317,14 +317,15 @@ def _valid_toml(text: str) -> bool:
     return True
 
 
-def _pre_tool_hooks(settings: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Hooks `PreToolUse` do settings.json, ignorando o que não tiver o formato esperado."""
+def _pre_tool_hooks(settings: Mapping[str, Any]) -> list[tuple[Any, dict[str, Any]]]:
+    """Pares (matcher, hook) do `PreToolUse` no settings.json, ignorando o que fugir do formato esperado."""
     hooks = settings.get("hooks")
     groups = hooks.get("PreToolUse") if isinstance(hooks, dict) else None
-    found: list[dict[str, Any]] = []
+    found: list[tuple[Any, dict[str, Any]]] = []
     for group in groups if isinstance(groups, list) else []:
         entries = group.get("hooks") if isinstance(group, dict) else None
-        found += [hook for hook in entries if isinstance(hook, dict)] if isinstance(entries, list) else []
+        if isinstance(entries, list):
+            found += [(group.get("matcher"), hook) for hook in entries if isinstance(hook, dict)]
     return found
 
 
@@ -900,11 +901,16 @@ class Setup:
         settings = self._read_settings()
         if settings is None:
             return False, f"{self.claude_settings} não é um JSON válido"
-        commands = [hook["command"] for hook in _pre_tool_hooks(settings) if _is_our_hook(hook)]
+        ours = [
+            (matcher, hook["command"]) for matcher, hook in _pre_tool_hooks(settings) if _is_our_hook(hook)
+        ]
+        commands = [command for _, command in ours]
         if hook_command(self.sys.python) not in commands:
             if commands:
                 return False, "aponta para outra instalação do jev-claud"
             return False, "testes e builds longos enchem o contexto do Claude"
+        if (HOOK_MATCHER, hook_command(self.sys.python)) not in ours:
+            return False, "versão antiga: não cobre o PowerShell (app desktop no Windows)"
         if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
             return False, "falta o atalho do jev-claud para o Git Bash"
         return True, "testes e builds chegam compactados (desligue com JEV_CLAUD_COMPACT=0)"
@@ -928,7 +934,7 @@ class Setup:
                     group = {**group, "hooks": others}
             kept.append(group)
         entry = {"type": "command", "command": hook_command(self.sys.python), "timeout": 10}
-        kept.append({"matcher": "Bash", "hooks": [entry]})
+        kept.append({"matcher": HOOK_MATCHER, "hooks": [entry]})
         settings["hooks"] = {**hooks, "PreToolUse": kept}
         if self.sys.platform == "win32":
             self._write_bash_shim()

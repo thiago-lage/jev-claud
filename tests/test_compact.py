@@ -137,6 +137,25 @@ def test_windows_python_path_uses_forward_slashes() -> None:
         assert wrapped.startswith("'C:/Users/Ana Lima/venv/Scripts/python.exe'")
 
 
+def test_powershell_uses_call_operator() -> None:
+    wrapped = wrap_command("pytest -x", python="C:\\Users\\Ana O'Lima\\py.exe", shell="PowerShell")
+    assert wrapped == "& 'C:/Users/Ana O''Lima/py.exe' -m jev_claud run -- pytest -x"
+
+
+@pytest.mark.parametrize(
+    "command", ["CI=1 npm test", "pytest | Select-Object -Last 5", "& pytest", "git status"]
+)
+def test_powershell_leaves_other_commands_alone(command: str) -> None:
+    assert wrap_command(command, shell="PowerShell") is None
+
+
+def test_hook_rewrites_powershell_tool() -> None:
+    answer = pre_bash_hook({**event("npm test"), "tool_name": "PowerShell"}, env={})
+    assert answer is not None
+    command = answer["hookSpecificOutput"]["updatedInput"]["command"]
+    assert command.startswith("& '") and command.endswith(" -m jev_claud run -- npm test")
+
+
 def event(command: str, **extra: object) -> dict[str, object]:
     return {
         "hook_event_name": "PreToolUse",

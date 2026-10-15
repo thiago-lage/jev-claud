@@ -18,12 +18,12 @@ O plugin é só texto: não roda programas, não grava arquivos e não acessa a 
 
 ## Instalar
 
-**Pelo diretório de plugins do Claude** (assim que o Jevin for aprovado; o envio está em
-análise):
+**Dentro do Claude** (diretório de plugins):
 
-1. No claude.ai ou no app desktop, abra **Personalização › Plugins**
-   ([claude.ai/customize/plugins](https://claude.ai/customize/plugins); em inglês, *Customize ›
-   Plugins*), vá na aba **Discover**, escolha **Jevin** e clique em **Add**.
+1. No claude.ai ou no app desktop, abra **Personalização › Skills** (em inglês, *Customize ›
+   Skills*), vá na aba **Descobrir**, procure **jevin** e adicione o **Jevin**.
+
+   ![Tela Skills do Claude com a busca jevin: o plugin Jevin, por Thiago Lage](https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/claude-skills.jpg)
 2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
    celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
    sozinho ao abrir, com o nome `jevin@synced`.
@@ -121,7 +121,7 @@ Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
 
 ## Desinstalar
 
-- **Pelo diretório:** remova o Jevin em **Personalização › Plugins** no claude.ai. Para só
+- **Pelo diretório:** remova o Jevin em **Personalização › Skills** no claude.ai. Para só
   desligar no Claude Code: `claude plugin disable jevin@synced`.
 - **Pelo marketplace:** `/plugin uninstall jevin@jev-claud` (ou, no terminal,
   `claude plugin uninstall jevin@jev-claud`).

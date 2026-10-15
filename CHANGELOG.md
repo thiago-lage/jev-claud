@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.1] - 2026-10-15
+
+### Corrigido
+
+- **Saídas compactadas no app desktop do Windows.** O app roda os comandos na ferramenta
+  PowerShell, e o hook só atendia a Bash: testes e builds chegavam inteiros ao Claude. O hook agora
+  atende as duas (`matcher` `Bash|PowerShell`) e, no PowerShell, reescreve para
+  `& '<python>' -m jev_claud run -- <comando>`. Rode `jev-claud setup` de novo: ele troca o hook
+  antigo.
+
+### Alterado
+
+- README mais direto: para que serve, como usar em 2 passos, quanto economiza, por que funciona
+  sozinho em toda conversa e em que sessões funciona (este computador, Remote Control, nuvem).
+- Jevin no diretório de plugins do Claude: README e guia do plugin mostram onde achá-lo
+  (*Personalização › Skills*, aba *Descobrir*), com print da tela.
+- Skill `jev`: a compactação vale no Bash e no PowerShell.
+
 ## [0.9.0] - 2026-10-15
 
 ### Adicionado

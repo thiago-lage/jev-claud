@@ -9,8 +9,9 @@ Usos:
 - `comando 2>&1 | jev-claud compact`: filtro de texto.
 - `jev-claud run -- pytest -x`: roda, compacta e sai com o código do comando.
 - Hook `PreToolUse` do Claude Code (`jev-claud hook pre-bash`): reescreve só comandos
-  simples e ruidosos (testes, builds, linters) para `jev-claud run`. A permissão
-  continua sendo pedida normalmente: o hook não aprova nada.
+  simples e ruidosos (testes, builds, linters) para `jev-claud run`, tanto na ferramenta
+  Bash quanto na PowerShell (a que o app desktop usa no Windows). A permissão continua
+  sendo pedida normalmente: o hook não aprova nada.
 """
 
 from __future__ import annotations
@@ -38,6 +39,9 @@ CONTEXT_LINES = 2
 MAX_IMPORTANT = 120
 MAX_LINE_CHARS = 400
 KEEP_LOGS = 20
+# Ferramentas de shell do Claude Code que o hook atende (o `matcher` é uma regex).
+SHELL_TOOLS = ("Bash", "PowerShell")
+HOOK_MATCHER = "|".join(SHELL_TOOLS)
 OFF_VALUES = frozenset({"0", "false", "no", "off", "nao", "não"})
 
 _IMPORTANT = re.compile(
@@ -158,7 +162,11 @@ def _python_arg(python: str | None = None) -> str:
     return shlex.quote(Path(python or sys.executable).as_posix())
 
 
-def runner_prefix(python: str | None = None) -> str:
+def runner_prefix(python: str | None = None, shell: str = "Bash") -> str:
+    if shell == "PowerShell":
+        # Operador de chamada com o caminho entre aspas simples (' vira '' no PowerShell).
+        quoted = Path(python or sys.executable).as_posix().replace("'", "''")
+        return f"& '{quoted}' -m jev_claud run --"
     return f"{_python_arg(python)} -m jev_claud run --"
 
 
@@ -167,11 +175,12 @@ def hook_command(python: str | None = None) -> str:
     return f"{_python_arg(python)} -m jev_claud hook pre-bash"
 
 
-def wrap_command(command: str, python: str | None = None) -> str | None:
+def wrap_command(command: str, python: str | None = None, shell: str = "Bash") -> str | None:
     """Reescreve um comando simples e ruidoso para `jev-claud run`; senão, None.
 
     O resultado é um comando simples (sem pipe nem subshell), que o Claude Code consegue
     analisar e casar com as regras de permissão, e que sai com o código do comando original.
+    `shell` é a ferramenta do Claude Code que vai rodá-lo: `Bash` ou `PowerShell`.
     """
     stripped = command.strip()
     if not stripped or "jev-claud" in stripped or "jev_claud" in stripped or _COMPOUND.search(stripped):
@@ -180,9 +189,10 @@ def wrap_command(command: str, python: str | None = None) -> str | None:
         words = shlex.split(stripped)
     except ValueError:
         return None
-    if _parse(words) is None:
-        return None
-    return f"{runner_prefix(python)} {stripped}"
+    parsed = _parse(words)
+    if parsed is None or (shell == "PowerShell" and parsed[0]):
+        return None  # `VAR=valor cmd` não é sintaxe do PowerShell: deixa o comando como está
+    return f"{runner_prefix(python, shell)} {stripped}"
 
 
 def run_command(
@@ -219,8 +229,9 @@ def run_command(
 
 
 def pre_bash_hook(event: Mapping[str, Any], env: Mapping[str, str] | None = None) -> dict[str, Any] | None:
-    """Resposta do hook `PreToolUse` (Bash), ou None para deixar o comando como está."""
-    if not enabled(env) or event.get("tool_name") != "Bash":
+    """Resposta do hook `PreToolUse` (Bash ou PowerShell), ou None para deixar o comando como está."""
+    shell = event.get("tool_name")
+    if not enabled(env) or shell not in SHELL_TOOLS:
         return None
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict) or tool_input.get("run_in_background"):
@@ -228,7 +239,7 @@ def pre_bash_hook(event: Mapping[str, Any], env: Mapping[str, str] | None = None
     command = tool_input.get("command")
     if not isinstance(command, str):
         return None
-    wrapped = wrap_command(command)
+    wrapped = wrap_command(command, shell=str(shell))
     if wrapped is None:
         return None
     # Sem `permissionDecision`: o Claude Code continua pedindo permissão como sempre.

@@ -3,13 +3,112 @@
 [![PyPI](https://img.shields.io/pypi/v/jev-claud?label=pypi&cacheSeconds=3600)](https://pypi.org/project/jev-claud/)
 [![CI](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml)
 
-**Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
+**Faz o Claude gastar menos tokens, sozinho, em toda conversa. Custo zero.**
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/terminal.png" alt="Terminal do jev-claud: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
 </p>
 
-`jev-claud` separa as duas saídas de IA que um app tem:
+## Para que serve
+
+O Claude paga, em tokens e em espaço de contexto, por tudo o que lê. Muito disso é ruído:
+centenas de linhas de testes passando, arquivos de dados inteiros lidos só para contar ou
+filtrar. O jev-claud corta esse ruído **antes** de ele chegar ao Claude. A qualidade não muda:
+o Claude continua lendo e editando o seu código normalmente.
+
+Depois de instalado, ele funciona **sozinho em toda conversa nova**. Você não chama nada.
+
+| O que o jev-claud faz | Quando entra | Quanto economiza |
+| --- | --- | --- |
+| Compacta saídas de teste e build | O Claude roda `pytest`, `npm test`, `cargo build`... e a saída passa de 80 linhas | 70% a 85% da saída (exemplo abaixo) |
+| Processa arquivos de dados fora do contexto | "Quantos dos 2.000 tickets de `tickets.csv` são cobrança?" | Dezenas de milhares de tokens viram ~300 |
+| Explora o código num contexto separado | "Onde a autenticação é validada?" | Só a conclusão volta, de um modelo menor |
+| Ensina quando usar Jev, LLM ou código puro | O código que você pede usa IA | Sem JSON + parse; a resposta do Jev não é cobrada |
+
+Exemplo real, os testes deste repositório:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/economia.png" alt="pytest -v compactado pelo jev-claud: 237 linhas viram 67, cerca de 4,9 mil tokens viram 800" width="720">
+</p>
+
+Para ver quanto você economizou no mês: `jev-claud spend` (ou só `jev-claud`).
+
+## Como usar: 2 passos
+
+**1. No terminal**, uma linha instala tudo e abre o assistente, que pergunta antes de cada passo:
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.sh | bash
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/setup.png" alt="jev-claud setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
+</p>
+
+**2. O plugin Jevin**, por um destes caminhos (use só um):
+
+- **Dentro do Claude** (app desktop ou claude.ai): abra **Personalização › Skills**, procure
+  **jevin** na aba **Descobrir** e adicione. O plugin fica na sua conta e o Claude Code o
+  sincroniza sozinho (`jevin@synced`).
+
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/claude-skills.jpg" alt="Tela Skills do Claude com a busca jevin: o plugin Jevin, por Thiago Lage" width="720">
+  </p>
+
+- **No Claude Code** (terminal ou aba Code do app desktop): o assistente do passo 1 já oferece
+  instalar. Para fazer à mão:
+
+  <p align="center">
+    <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/plugin.png" alt="Comando /plugin install jevin --marketplace thiago-lage/jev-claud no Claude Code" width="720">
+  </p>
+
+Pronto. Abra uma conversa nova e trabalhe normalmente. Para conferir se está tudo ativo:
+`jev-claud setup --check`.
+
+### Por que não preciso chamar nada?
+
+Cada peça fica na configuração do Claude Code, que ele carrega sozinho em toda sessão:
+
+| Peça | Onde fica | O que faz em cada conversa |
+| --- | --- | --- |
+| Hook de compactação | `~/.claude/settings.json` | Reescreve testes e builds para sair compactados, no Bash e no PowerShell (o shell do app desktop no Windows) |
+| Ferramentas MCP | registro do Claude Code (escopo de usuário) | `classify`, `rank`, `summarize_file`... ficam disponíveis |
+| Regra global | `~/.claude/CLAUDE.md` | Diz ao Claude quando usar cada ferramenta e quando responder direto |
+| Plugin Jevin | plugins do Claude Code | A skill `jev` entra quando é relevante; o subagente `scout` explora o código |
+
+### Em que sessões funciona
+
+No app desktop, a sessão pode rodar em três lugares:
+
+| Sessão | Funciona? | Por quê |
+| --- | --- | --- |
+| **Este computador** | Sim, tudo | Usa o `~/.claude` e o jev-claud instalados nesta máquina |
+| **Remote Control** | Sim, tudo | É uma sessão deste computador, controlada pelo celular ou pela web |
+| **Nuvem** | Só o plugin, se o repositório pedir | Roda numa máquina da Anthropic que clona o repositório: o hook, o MCP, a regra global e o Ollama do seu computador não vão junto |
+
+Para ter o Jevin também nas sessões na nuvem, declare o plugin no `.claude/settings.json` do
+repositório (o Claude Code instala os plugins declarados ali):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "jev-claud": { "source": { "source": "github", "repo": "thiago-lage/jev-claud" } }
+  },
+  "enabledPlugins": { "jevin@jev-claud": true }
+}
+```
+
+## Para desenvolvedores: decisões tipadas no seu código
+
+**Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
+
+A biblioteca Python `jev-claud` separa as duas saídas de IA que um app tem:
 
 | Quem consome a resposta? | Use | Motor | Por quê |
 | --- | --- | --- | --- |
@@ -48,7 +147,7 @@ elif d["setor"].is_("financeiro") and d["urgente"].yes:
 resposta = r.write("Escreva uma resposta curta e empática para o cliente.", context=ticket_text)
 ```
 
-## Por que isso economiza
+### Por que as decisões tipadas economizam
 
 - **Uma requisição, várias decisões.** Perguntas independentes sobre o mesmo estado vão
   juntas em `decide` e rodam em paralelo no Jev: o custo fixo da requisição é pago uma vez.
@@ -66,28 +165,11 @@ resposta = r.write("Escreva uma resposta curta e empática para o cliente.", con
 > Por isso o padrão é custo zero: o modo offline é uma heurística lexical local, boa para
 > desenvolvimento, testes e CI, mas **não substitui o Jev** em produção.
 
-## Instalação rápida (auto-setup)
+## O que o setup instala
 
-Uma linha instala tudo num ambiente isolado (sem mexer no seu Python) e abre o assistente:
-
-**Windows** (PowerShell):
-
-```powershell
-irm https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.ps1 | iex
-```
-
-**macOS / Linux**:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.sh | bash
-```
-
-O assistente `jev-claud setup` funciona como o primeiro `claude` no terminal: mostra o que
-falta, explica para que serve e **pergunta antes de instalar cada coisa**:
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/setup.png" alt="jev-claud setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
-</p>
+O instalador de uma linha ([Como usar](#como-usar-2-passos)) cria um ambiente isolado, sem mexer
+no seu Python, e abre o assistente `jev-claud setup`. Ele funciona como o primeiro `claude` no
+terminal: mostra o que falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 
 | Passo | O que faz |
 | --- | --- |
@@ -159,7 +241,8 @@ regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
 O `jev-claud setup` grava um hook `PreToolUse` no `~/.claude/settings.json`. Testes, builds e
 linters simples (`pytest`, `npm test`, `cargo build`, `go test`, `make`...) passam a rodar via
-`jev-claud run`: saídas acima de ~80 linhas chegam ao Claude com o começo, o fim e as linhas de
+`jev-claud run`, tanto na ferramenta Bash quanto na PowerShell (a que o app desktop usa no
+Windows): saídas acima de ~80 linhas chegam ao Claude com o começo, o fim e as linhas de
 erro com contexto. A saída completa fica num arquivo citado no rodapé, e o código de saída é o
 do comando original. Custo zero: não usa LLM.
 
@@ -168,10 +251,11 @@ do comando original. Custo zero: não usa LLM.
 - **Conservador**: só mexe em comandos simples; com `|`, `>`, `&&`, `;`, `$(...)` ou em segundo
   plano, nada muda. O `jev-claud run` recusa qualquer comando que não seja teste/build/lint.
 - **Desligar**: `JEV_CLAUD_COMPACT=0` (no ambiente ou na frente de um comando).
-- Teste real (este repositório, `pytest -v`): 174 linhas viraram 64, com o resumo final intacto.
+- Teste real (este repositório, `pytest -v`): 237 linhas viraram 67, com o resumo final intacto.
 
 O hook usa o caminho absoluto do Python do jev-claud, que funciona em todos os sistemas (no
-Windows, o Claude Code roda os comandos no Git Bash). O setup preserva o resto do
+Windows, o Claude Code roda os comandos no Git Bash ou, no app desktop, no PowerShell). Quem
+instalou até a 0.9.0 roda `jev-claud setup` de novo: o hook antigo só via o Bash. O setup preserva o resto do
 `settings.json` e não mexe nele se o arquivo não for um JSON válido.
 
 ### O que o jev-claud roda e envia
@@ -200,12 +284,10 @@ O plugin ensina o Claude a poupar contexto **sem mudar a qualidade da entrega**:
 continua implementando direto (edita arquivos, roda testes). Guia completo:
 [plugin/README.md](plugin/README.md).
 
-**Pelo diretório de plugins do Claude** (assim que o Jevin for aprovado; o envio está em
-análise):
+**Dentro do Claude** (diretório de plugins):
 
-1. No claude.ai ou no app desktop, abra **Personalização › Plugins**
-   ([claude.ai/customize/plugins](https://claude.ai/customize/plugins); em inglês, *Customize ›
-   Plugins*), vá na aba **Discover**, escolha **Jevin** e clique em **Add**.
+1. No claude.ai ou no app desktop, abra **Personalização › Skills** (em inglês, *Customize ›
+   Skills*), vá na aba **Descobrir**, procure **jevin** e adicione o **Jevin**.
 2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
    celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
    sozinho ao abrir, com o nome `jevin@synced`.
@@ -243,7 +325,7 @@ depois de atualizar).
 | --- | --- | --- | --- |
 | Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | Automático pelo setup | Automático pelo setup; ligue em *Settings › Tools & MCP* | Automático pelo setup |
 | Regra "Jev ramifica, LLM escreve" | Automático (`~/.claude/CLAUDE.md`) | Manual: `jev-claud rule` e cole em *Settings › Rules* | Automático (`AGENTS.md`) |
-| [Saídas de teste compactadas](#saídas-de-teste-compactadas) | Automático (hook que não aprova nada sozinho) | Em desenvolvimento | Em desenvolvimento |
+| [Saídas de teste compactadas](#saídas-de-teste-compactadas) | Automático no Bash e no PowerShell (hook que não aprova nada sozinho) | Em desenvolvimento | Em desenvolvimento |
 | [Plugin Jevin](#plugin-do-claude-code-jevin) (skill `jev` e subagente `scout`) | Sim: diretório do Claude ou marketplace do projeto | Não | Não |
 
 O plugin Jevin também vale no Cowork e, só a skill, nas conversas do claude.ai. A biblioteca
