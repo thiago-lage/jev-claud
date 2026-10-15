@@ -99,6 +99,7 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Saídas compactadas | Grava no `~/.claude/settings.json` o hook que compacta as saídas longas de testes e builds (detalhes abaixo). |
 | Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): skill e subagente explorador. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
+| Cursor e Codex | Só se estiverem instalados: as mesmas ferramentas MCP e, no Codex, a mesma regra ([detalhes](#também-no-cursor-e-no-codex)). |
 
 ```bash
 jev-claud setup            # interativo (também abre sozinho no primeiro `jev-claud`)
@@ -235,6 +236,22 @@ atalho).
 Funciona no Claude Code e no Cowork; nas conversas do claude.ai, só a skill. Até a 0.7 o hook de
 compactação vinha no plugin; desde a 0.8 ele é instalado pelo `jev-claud setup` (rode-o de novo
 depois de atualizar).
+
+## Também no Cursor e no Codex
+
+O servidor MCP do jev-claud funciona em qualquer agente compatível com MCP. Quando o
+`jev-claud setup` encontra o Cursor ou o Codex neste computador, ele oferece configurá-los
+também, perguntando antes de cada passo, como faz com o Claude Code:
+
+| Passo | Cursor | Codex |
+| --- | --- | --- |
+| Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | `~/.cursor/mcp.json` | tabela `[mcp_servers.jev-claud]` no `~/.codex/config.toml` |
+| Regra "Jev ramifica, LLM escreve" | cole o bloco da regra em *Cursor Settings › Rules* | `~/.codex/AGENTS.md` |
+
+- O Codex usa `$CODEX_HOME` no lugar de `~/.codex`, se a variável estiver definida.
+- O setup preserva o resto de cada arquivo e troca só a entrada do jev-claud (por exemplo, a de
+  outro ambiente virtual). Um arquivo que ele não consiga ler com segurança fica como está.
+- A compactação das saídas de teste e o plugin Jevin, por enquanto, são só do Claude Code.
 
 ## Configuração (tudo opcional)
 
