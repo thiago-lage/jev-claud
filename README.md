@@ -85,20 +85,9 @@ curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install
 O assistente `jev-claude setup` funciona como o primeiro `claude` no terminal: mostra o que
 falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 
-```
-╭──────────────────────────────────────────────╮
-│ ✻ Bem-vindo ao jev-claude setup!             │
-│                                              │
-│   Jev decide o que o código ramifica.        │
-│   LLM escreve o que a pessoa lê.             │
-│   Custo zero por padrão.                     │
-╰──────────────────────────────────────────────╯
-
- ✔ Python 3.10+  3.12.10 (ambiente isolado)
- ✔ SDK do Jev (typesafe-sdk)  instalado
- ✖ Ollama (LLM local e grátis para texto)  texto grátis precisa de uma LLM local
-   › Instalar o Ollama via winget? (aceita os termos do pacote; licença MIT) (S/n)
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/thiago-lage/jev-claude/main/docs/setup.png" alt="jev-claude setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
+</p>
 
 | Passo | O que faz |
 | --- | --- |
