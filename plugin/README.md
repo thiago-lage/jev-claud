@@ -80,10 +80,22 @@ O `setup` pergunta antes de cada passo e pode:
 
 Sem o pacote, a skill e o subagente funcionam normalmente.
 
-## Privacidade
+## Privacidade e dados
 
-O plugin não coleta nem envia nada. O que o pacote jev-claud guarda no seu computador, e quando
-algo sai dele, está na
+O plugin não lê nem guarda dados pessoais e não envia nada por conta própria. O autor não tem
+servidor e não recebe nenhum dado: nada é retido fora do seu computador.
+
+A skill `jev` pode orientar o Claude a usar as ferramentas MCP do jev-claud, **se você instalou
+o pacote e rodou o `jev-claud setup`**. Só nesse caso, e só com o que o pedido envolver, dados
+podem sair do computador para estes serviços:
+
+| Serviço | Quando |
+| --- | --- |
+| API do TypeSafe Jev (`api.typesafe.ai`) | Só com uma chave configurada e orçamento acima de US$ 0. O padrão é US$ 0, sem envio |
+| Ollama | Ao gerar ou resumir texto. Roda no seu computador por padrão (`localhost:11434`) |
+| Uma LLM compatível com a API da OpenAI | Só se você definir `JEV_CLAUD_LLM_BASE_URL` |
+
+Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
 [política de privacidade](https://github.com/thiago-lage/jev-claud/blob/main/PRIVACY.md).
 
 ## Problemas e suporte
