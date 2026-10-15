@@ -8,6 +8,9 @@ name: Release
 # Versão antiga (ex.: 0.3.1): informe `target` com o commit e desmarque `publish`; só o release
 # no GitHub é criado.
 #
+# Se o release falhar com "HTTP 403: Resource not accessible by integration", crie um token
+# fine-grained (Contents: read and write, só neste repositório) e salve como secret RELEASE_TOKEN.
+#
 # PyPI por "trusted publishing", sem token guardado no repositório. Configuração única em
 # https://pypi.org/manage/account/publishing/ (pending publisher):
 #   projeto: jev-claude · dono: thiago-lage · repositório: jev-claude
@@ -104,7 +107,9 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
+      # RELEASE_TOKEN (opcional): token pessoal com Contents: read and write neste repositório,
+      # para quando o token padrão do Actions não pode criar releases (HTTP 403).
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       VERSION: ${{ needs.plan.outputs.version }}
       TARGET: ${{ needs.plan.outputs.target }}
     steps:
