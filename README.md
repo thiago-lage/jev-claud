@@ -262,9 +262,9 @@ Com a chave e o orçamento do Jev configurados, `decide` (e `when`, `switch`, `r
 
 ```python
 d = r.decide(ticket, {"setor": setor, "urgente": urgente})
-d.source          # "offline", "jev", "cache" ou "mixed" (parte offline, parte Jev)
-d.escalated       # ("urgente",): o que foi ao Jev
-d["setor"].source # de onde veio cada resposta
+d.source  # "offline", "jev", "cache" ou "mixed" (parte offline, parte Jev)
+d.escalated  # ("urgente",): o que foi ao Jev
+d["setor"].source  # de onde veio cada resposta
 ```
 
 - O modo offline é conservador: só fica confiante quando o texto tem os termos das opções.
@@ -279,12 +279,12 @@ d["setor"].source # de onde veio cada resposta
 ```python
 from jev_claude import Image, box, noul
 
-foto = Image("devolucao_123.jpg")             # caminho ou bytes (PNG/JPEG)
+foto = Image("devolucao_123.jpg")  # caminho ou bytes (PNG/JPEG)
 d = r.decide(
-    {"pedido": "#123", "foto": foto},         # a imagem pode ir no estado, em listas...
+    {"pedido": "#123", "foto": foto},  # a imagem pode ir no estado, em listas...
     {
         "danificado": noul("O produto chegou danificado?"),
-        "onde": box("Onde está o dano?"),     # Box: localiza algo na imagem
+        "onde": box("Onde está o dano?"),  # Box: localiza algo na imagem
     },
 )
 if d["danificado"].yes and d["danificado"].confident:
