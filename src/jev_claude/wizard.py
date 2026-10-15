@@ -41,8 +41,9 @@ PACKAGE_SPEC = f"jev-claude[jev] @ git+{REPO_URL}"
 TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
 PLUGIN_REPO = "thiago-lage/jev-claude"
 PLUGIN_MARKETPLACE = "jev-claude"
-PLUGIN_ID = f"jev@{PLUGIN_MARKETPLACE}"
-OLD_PLUGIN_ID = f"jev-claude@{PLUGIN_MARKETPLACE}"  # nome até a 0.6.0
+PLUGIN_ID = f"jev-clau@{PLUGIN_MARKETPLACE}"
+# Nomes antigos do plugin: `jev-claude` até a 0.6.0, `jev` na 0.6.1 e 0.6.2.
+OLD_PLUGIN_IDS = (f"jev-claude@{PLUGIN_MARKETPLACE}", f"jev@{PLUGIN_MARKETPLACE}")
 RULE_START = "<!-- jev-claude:start -->"
 RULE_END = "<!-- jev-claude:end -->"
 RULE_VERSION = 2
@@ -720,8 +721,9 @@ class Setup:
             return False, "precisa do Claude Code"
         code, output = self.sys.capture([path, "plugin", "list"])
         if code != 0 or not _listed(output, PLUGIN_ID):
-            if _listed(output, OLD_PLUGIN_ID):
-                return False, "nome antigo (jev-claude): atualizar para jev"
+            old = next((name for name in OLD_PLUGIN_IDS if _listed(output, name)), None)
+            if old is not None:
+                return False, f"nome antigo ({old.split('@')[0]}): atualizar para jev-clau"
             return False, "não instalado"
         if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
             return False, "falta o atalho do jev-claude para o Git Bash"
@@ -737,15 +739,16 @@ class Setup:
         if not _listed(output, PLUGIN_ID):
             _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
             if _listed(marketplaces, PLUGIN_MARKETPLACE):
-                # Catálogo novo: o plugin passou a se chamar `jev` na 0.6.1.
+                # Catálogo novo: o plugin passou a se chamar `jev-clau` na 0.6.3.
                 self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
             elif self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
                 return False
             if self.sys.run([path, "plugin", "install", PLUGIN_ID]) != 0:
                 return False
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
-        if _listed(output, OLD_PLUGIN_ID):
-            self.sys.run([path, "plugin", "uninstall", OLD_PLUGIN_ID])
+        for old in OLD_PLUGIN_IDS:
+            if _listed(output, old):
+                self.sys.run([path, "plugin", "uninstall", old])
         return True
 
     def _write_bash_shim(self) -> None:

@@ -7,13 +7,14 @@
   },
   "plugins": [
     {
-      "name": "jev",
+      "name": "jev-clau",
       "source": "./plugin",
       "description": "Saídas de teste compactadas, skill de decisões tipadas vs. texto, subagente explorador.",
       "category": "productivity"
     }
   ],
   "renames": {
-    "jev-claude": "jev"
+    "jev-claude": "jev",
+    "jev": "jev-clau"
   }
 }

@@ -54,4 +54,4 @@ indica onde está a saída inteira. O código de saída é o do comando original
 ## 4. Explorar sem encher o contexto
 
 Para perguntas amplas sobre o código ("onde X é tratado?", "como Y funciona?") que exigiriam
-ler muitos arquivos, delegue ao subagente `jev:scout`: só a conclusão volta.
+ler muitos arquivos, delegue ao subagente `jev-clau:scout`: só a conclusão volta.

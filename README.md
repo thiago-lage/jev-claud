@@ -96,7 +96,7 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
 | Servidor MCP | Registra o `jev-claude` no Claude Code para delegar lotes e economizar tokens. |
-| Plugin | Instala o plugin `jev@jev-claude`: saídas de teste compactadas, skill e subagente. |
+| Plugin | Instala o plugin `jev-clau@jev-claude`: saídas de teste compactadas, skill e subagente. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
@@ -159,12 +159,13 @@ implementando direto (edita arquivos, roda testes); o jev-claude só tira o ruí
 
 ```text
 /plugin marketplace add thiago-lage/jev-claude
-/plugin install jev@jev-claude
+/plugin install jev-clau@jev-claude
 ```
 
 (o `jev-claude setup` faz isso por você). O hook usa o comando `jev-claude`
 (`pip install jev-claude`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
-Até a 0.6.0 o plugin se chamava `jev-claude`; o marketplace migra quem já tinha instalado.
+O plugin já se chamou `jev-claude` (até a 0.6.0) e `jev` (0.6.1 e 0.6.2). Quem tinha um desses: rode
+`jev-claude setup` (troca sozinho) ou `/plugin install jev-clau@jev-claude` uma vez.
 
 | Onde | O que carrega |
 | --- | --- |

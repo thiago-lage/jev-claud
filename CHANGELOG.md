@@ -7,6 +7,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ### Alterado
 
+- O identificador do plugin passa a ser **`jev-clau`** (o diretório da Anthropic apontou
+  confusão entre `jev` e outro plugin chamado "Jev"). Nome de exibição: "Jev Claude".
+  O `renames` do marketplace encadeia `jev-claude -> jev -> jev-clau` e atualiza as
+  configurações; o plugin novo carrega após `/plugin install jev-clau@jev-claude` uma vez, que o
+  `jev-claude setup` faz sozinho (e remove o antigo).
 - O hook do plugin aponta direto para `hooks/pre-bash.sh` (caminho literal sob
   `${CLAUDE_PLUGIN_ROOT}`), como pede a validação do diretório da Anthropic.
 
