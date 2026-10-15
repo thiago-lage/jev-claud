@@ -41,7 +41,8 @@ PACKAGE_SPEC = f"jev-claude[jev] @ git+{REPO_URL}"
 TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
 PLUGIN_REPO = "thiago-lage/jev-claude"
 PLUGIN_MARKETPLACE = "jev-claude"
-PLUGIN_ID = f"jev-claude@{PLUGIN_MARKETPLACE}"
+PLUGIN_ID = f"jev@{PLUGIN_MARKETPLACE}"
+OLD_PLUGIN_ID = f"jev-claude@{PLUGIN_MARKETPLACE}"  # nome até a 0.6.0
 RULE_START = "<!-- jev-claude:start -->"
 RULE_END = "<!-- jev-claude:end -->"
 RULE_VERSION = 2
@@ -247,6 +248,11 @@ class UI:
             return self._secret(f"   {self.paint(self.sym['arrow'], self._ACCENT)} {question}: ").strip()
         except EOFError:
             return ""
+
+
+def _listed(output: str, name: str) -> bool:
+    """`name` aparece como item (não só como parte de outro nome) na saída de uma listagem."""
+    return any(name in line.replace("❯", " ").split() for line in output.splitlines())
 
 
 def _isatty(stream: Any) -> bool:
@@ -713,7 +719,9 @@ class Setup:
         if not path:
             return False, "precisa do Claude Code"
         code, output = self.sys.capture([path, "plugin", "list"])
-        if code != 0 or PLUGIN_ID not in output:
+        if code != 0 or not _listed(output, PLUGIN_ID):
+            if _listed(output, OLD_PLUGIN_ID):
+                return False, "nome antigo (jev-claude): atualizar para jev"
             return False, "não instalado"
         if self.sys.platform == "win32" and not self.sys.exists(self._bash_shim()):
             return False, "falta o atalho do jev-claude para o Git Bash"
@@ -726,16 +734,19 @@ class Setup:
         if self.sys.platform == "win32":
             self._write_bash_shim()
         _, output = self.sys.capture([path, "plugin", "list"])
-        if PLUGIN_ID in output:
-            return True
-        _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
-        added = PLUGIN_MARKETPLACE in marketplaces
-        if not added and self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
-            return False
-        ok = self.sys.run([path, "plugin", "install", PLUGIN_ID]) == 0
-        if ok:
+        if not _listed(output, PLUGIN_ID):
+            _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
+            if _listed(marketplaces, PLUGIN_MARKETPLACE):
+                # Catálogo novo: o plugin passou a se chamar `jev` na 0.6.1.
+                self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
+            elif self.sys.run([path, "plugin", "marketplace", "add", PLUGIN_REPO]) != 0:
+                return False
+            if self.sys.run([path, "plugin", "install", PLUGIN_ID]) != 0:
+                return False
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
-        return ok
+        if _listed(output, OLD_PLUGIN_ID):
+            self.sys.run([path, "plugin", "uninstall", OLD_PLUGIN_ID])
+        return True
 
     def _write_bash_shim(self) -> None:
         """No Windows, o Claude Code roda comandos no Git Bash, que não acha `jev-claude.cmd`."""

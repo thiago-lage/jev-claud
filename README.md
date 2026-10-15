@@ -96,7 +96,7 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
 | Servidor MCP | Registra o `jev-claude` no Claude Code para delegar lotes e economizar tokens. |
-| Plugin | Instala o plugin `jev-claude@jev-claude`: saídas de teste compactadas, skill e subagente. |
+| Plugin | Instala o plugin `jev@jev-claude`: saídas de teste compactadas, skill e subagente. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
@@ -159,10 +159,18 @@ implementando direto (edita arquivos, roda testes); o jev-claude só tira o ruí
 
 ```text
 /plugin marketplace add thiago-lage/jev-claude
-/plugin install jev-claude@jev-claude
+/plugin install jev@jev-claude
 ```
 
-(o `jev-claude setup` faz isso por você). O comando `jev-claude` precisa estar instalado.
+(o `jev-claude setup` faz isso por você). O hook usa o comando `jev-claude`
+(`pip install jev-claude`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
+Até a 0.6.0 o plugin se chamava `jev-claude`; o marketplace migra quem já tinha instalado.
+
+| Onde | O que carrega |
+| --- | --- |
+| Claude Code | Tudo: hook, skill e subagente |
+| Cowork | Hook, skill e subagente (o hook precisa do `jev-claude` no computador) |
+| claude.ai (chat) | Só a skill |
 
 | Peça | O que faz | Custo |
 | --- | --- | --- |
@@ -181,6 +189,23 @@ Detalhes do hook:
 
 O servidor MCP continua registrado pelo `setup` (com o caminho absoluto do Python, que funciona
 em todos os sistemas), e a regra global agora diz explicitamente para implementar direto.
+
+### O que o plugin roda e envia
+
+Transparência total sobre o que acontece na sua máquina:
+
+- **Roda:** o hook executa `hooks/pre-bash.sh`, que chama `jev-claude hook pre-bash` só quando o
+  Claude Code vai rodar um comando no Bash. Se for um teste/build/lint simples, o comando é
+  reescrito para `python -m jev_claude run -- <o mesmo comando>`, que o executa, compacta a saída
+  e devolve o mesmo código de saída. Nenhum outro comando é alterado.
+- **Grava (só localmente, na pasta de dados do jev-claude):** a saída completa de cada comando
+  compactado (`logs/`, as 20 mais recentes) e contadores de economia por mês num SQLite. Nada sai
+  da sua máquina.
+- **Envia:** o plugin em si não acessa a rede. A biblioteca `jev-claude` só envia texto para a
+  API da TypeSafe (Jev) se você configurar uma chave e um orçamento, e só para o Ollama local
+  quando usa a LLM de texto.
+- **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
+  passa pelas mesmas perguntas de permissão) e não coleta telemetria.
 
 ## Configuração (tudo opcional)
 

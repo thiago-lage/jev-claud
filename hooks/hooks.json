@@ -1,10 +1,12 @@
 {
-  "description": "Compacta saídas longas de testes, builds e linters antes que entrem no contexto (sem LLM, grátis). Desligue com JEV_CLAUDE_COMPACT=0.",
+  "description": "Compacta saídas longas de testes, builds e linters antes que entrem no contexto (sem LLM, grátis). Exige o jev-claude instalado; sem ele, não faz nada. Desligue com JEV_CLAUDE_COMPACT=0.",
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "jev-claude hook pre-bash", "timeout": 10 }]
+        "hooks": [
+          { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/pre-bash.sh\"", "timeout": 10 }
+        ]
       }
     ]
   }
