@@ -76,6 +76,7 @@ jobs:
           bash -n install.sh
           bash install.sh
           ~/.local/bin/jev-claud --version
+          ~/.local/bin/jev-claude --version  # nome antigo continua funcionando
           ~/.local/bin/jev-claud setup --check || true
       - name: install.ps1
         if: runner.os == 'Windows'
@@ -83,5 +84,6 @@ jobs:
         run: |
           ./install.ps1
           & "$env:USERPROFILE\.local\bin\jev-claud.cmd" --version
+          & "$env:USERPROFILE\.local\bin\jev-claude.cmd" --version
           & "$env:USERPROFILE\.local\bin\jev-claud.cmd" setup --check
           exit 0
