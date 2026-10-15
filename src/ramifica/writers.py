@@ -1,0 +1,142 @@
+"""Texto para pessoas lerem: LLMs plugáveis, priorizando opções gratuitas.
+
+- `OpenAICompatibleWriter`: qualquer endpoint `/chat/completions` (Ollama, LM Studio,
+  llama.cpp, vLLM, ou provedores com plano gratuito que expõem esse formato).
+- `OllamaWriter`: atalho para o Ollama local (grátis, roda na sua máquina).
+- `CallableWriter`: embrulha qualquer função `(prompt, system) -> str` (ex.: o SDK da Anthropic).
+
+Só a biblioteca padrão é usada: nenhuma dependência extra.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import urllib.error
+import urllib.request
+from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
+
+from ramifica.errors import WriterError
+
+OLLAMA_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_MODEL = "llama3.2"
+
+
+@runtime_checkable
+class Writer(Protocol):
+    name: str
+
+    def write(
+        self, prompt: str, *, system: str | None = None, max_tokens: int = 800, temperature: float = 0.3
+    ) -> str: ...
+
+
+class OpenAICompatibleWriter:
+    """Cliente mínimo para APIs no formato OpenAI Chat Completions."""
+
+    name = "openai-compatible"
+
+    def __init__(
+        self, base_url: str, model: str, *, api_key: str | None = None, timeout: float = 120.0
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self._api_key = api_key
+        self.timeout = timeout
+
+    def write(
+        self, prompt: str, *, system: str | None = None, max_tokens: int = 800, temperature: float = 0.3
+    ) -> str:
+        messages = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": prompt}
+        ]
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        data = _post_json(f"{self.base_url}/chat/completions", body, headers, self.timeout)
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as error:
+            raise WriterError(f"Resposta inesperada da LLM: {str(data)[:300]}") from error
+        return str(content).strip()
+
+
+class OllamaWriter(OpenAICompatibleWriter):
+    """Ollama local via endpoint compatível com OpenAI. Custo zero."""
+
+    name = "ollama"
+
+    def __init__(self, model: str | None = None, *, host: str | None = None, timeout: float = 300.0) -> None:
+        self.host = (host or os.environ.get("OLLAMA_HOST") or OLLAMA_URL).rstrip("/")
+        if not self.host.startswith(("http://", "https://")):
+            self.host = f"http://{self.host}"
+        super().__init__(
+            f"{self.host}/v1",
+            model or os.environ.get("RAMIFICA_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
+            timeout=timeout,
+        )
+
+    @staticmethod
+    def available(host: str | None = None, timeout: float = 0.3) -> bool:
+        base = (host or os.environ.get("OLLAMA_HOST") or OLLAMA_URL).rstrip("/")
+        if not base.startswith(("http://", "https://")):
+            base = f"http://{base}"
+        try:
+            with urllib.request.urlopen(f"{base}/api/tags", timeout=timeout) as response:
+                return bool(response.status == 200)
+        except (OSError, ValueError):
+            return False
+
+
+class CallableWriter:
+    """Usa qualquer função como LLM: `fn(prompt, system) -> str`."""
+
+    name = "callable"
+
+    def __init__(self, fn: Callable[[str, str | None], str], *, name: str = "callable") -> None:
+        self._fn = fn
+        self.name = name
+
+    def write(
+        self, prompt: str, *, system: str | None = None, max_tokens: int = 800, temperature: float = 0.3
+    ) -> str:
+        return self._fn(prompt, system)
+
+
+def auto_writer() -> Writer | None:
+    """Detecta uma LLM de texto sem custo extra de configuração.
+
+    1. `RAMIFICA_LLM_BASE_URL` + `RAMIFICA_LLM_MODEL` (+ `RAMIFICA_LLM_API_KEY` opcional)
+    2. Ollama rodando localmente
+    3. nenhuma (o `write()` explica como configurar)
+    """
+    base_url = os.environ.get("RAMIFICA_LLM_BASE_URL", "").strip()
+    if base_url:
+        model = os.environ.get("RAMIFICA_LLM_MODEL", "").strip()
+        if not model:
+            raise WriterError("Defina RAMIFICA_LLM_MODEL junto com RAMIFICA_LLM_BASE_URL.")
+        return OpenAICompatibleWriter(base_url, model, api_key=os.environ.get("RAMIFICA_LLM_API_KEY") or None)
+    if OllamaWriter.available():
+        return OllamaWriter()
+    return None
+
+
+def _post_json(url: str, body: dict[str, Any], headers: dict[str, str], timeout: float) -> Any:
+    request = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:300]
+        raise WriterError(f"LLM respondeu HTTP {error.code}: {detail}") from error
+    except (OSError, ValueError) as error:
+        raise WriterError(f"Falha ao chamar a LLM em {url}: {error}") from error
