@@ -3,6 +3,14 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.1] - 2026-10-15
+
+### Alterado
+
+- **O instalador de uma linha e o `jev-claud update` usam a versão lançada no PyPI**
+  (`jev-claud[jev]`), e não mais o que estiver no GitHub. A versão em desenvolvimento continua
+  disponível com `jev-claud update --dev` ou `JEV_CLAUD_SPEC` no instalador.
+
 ## [0.8.0] - 2026-10-15
 
 ### Alterado

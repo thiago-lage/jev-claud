@@ -13,7 +13,16 @@ import pytest
 from jev_claud import Settings
 from jev_claud.cli import main
 from jev_claud.config import config_path, load_config, save_config
-from jev_claud.wizard import CLAUDE_RULE, PACKAGE_SPEC, RULE_END, RULE_START, UI, Setup, System
+from jev_claud.wizard import (
+    CLAUDE_RULE,
+    DEV_PACKAGE_SPEC,
+    PACKAGE_SPEC,
+    RULE_END,
+    RULE_START,
+    UI,
+    Setup,
+    System,
+)
 
 # Hook que o setup grava no settings.json (o FakeSystem usa "python" como Python).
 HOOK = {"type": "command", "command": "python -m jev_claud hook pre-bash", "timeout": 10}
@@ -395,7 +404,10 @@ def test_cli_update_upgrades_itself_when_not_editable(
     monkeypatch.setattr("jev_claud.cli._installed_editable", lambda: False)
     assert main(["update", "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "typesafe-sdk" in out and PACKAGE_SPEC in out
+    assert "typesafe-sdk" in out and f"--upgrade {PACKAGE_SPEC}\n" in out
+    assert PACKAGE_SPEC == "jev-claud[jev]"  # versão lançada no PyPI
+    assert main(["update", "--dry-run", "--dev"]) == 0
+    assert DEV_PACKAGE_SPEC in capsys.readouterr().out
 
 
 def test_cli_update_refuses_to_replace_running_windows_exe(

@@ -22,7 +22,7 @@ from jev_claud.errors import JevClaudError
 from jev_claud.media import Image
 from jev_claud.models import forget_newest, resolve_model
 from jev_claud.questions import Question, box, choice, noul, score
-from jev_claud.wizard import PACKAGE_SPEC, Mode, needs_first_run, run_setup
+from jev_claud.wizard import DEV_PACKAGE_SPEC, PACKAGE_SPEC, Mode, needs_first_run, run_setup
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -116,6 +116,7 @@ def _parser() -> argparse.ArgumentParser:
         "update", help="atualiza o jev-claud, o SDK do Jev e redescobre o modelo mais novo"
     )
     update.add_argument("--dry-run", action="store_true")
+    update.add_argument("--dev", action="store_true", help="versão em desenvolvimento, direto do GitHub")
     update.set_defaults(handler=_update)
 
     cache = sub.add_parser("cache", help="gerencia o cache local de decisões")
@@ -342,7 +343,8 @@ def _update(r: JevClaud, args: argparse.Namespace) -> int:
         )
         return 1
     if self_upgrade:
-        commands.append([sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_SPEC])
+        spec = DEV_PACKAGE_SPEC if args.dev else PACKAGE_SPEC
+        commands.append([sys.executable, "-m", "pip", "install", "--upgrade", spec])
     for command in commands:
         print("$ " + " ".join(command))
         if not args.dry_run:
