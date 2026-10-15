@@ -56,25 +56,71 @@ resposta = r.write("Escreva uma resposta curta e empática para o cliente.", con
 > Por isso o padrão é custo zero: o modo offline é uma heurística lexical local, boa para
 > desenvolvimento, testes e CI, mas **não substitui o Jev** em produção.
 
-## Instalação
+## Instalação rápida (auto-setup)
 
-A partir do código-fonte (Python 3.10+):
+Uma linha instala tudo num ambiente isolado (sem mexer no seu Python) e abre o assistente:
 
-```bash
-pip install -e ".[jev]"
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.ps1 | iex
 ```
 
-Ou direto do GitHub, depois de publicado:
+**macOS / Linux**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claude/main/install.sh | bash
+```
+
+O assistente `jev-claude setup` funciona como o primeiro `claude` no terminal: mostra o que
+falta, explica para que serve e **pergunta antes de instalar cada coisa**:
+
+```
+╭──────────────────────────────────────────────╮
+│ ✻ Bem-vindo ao jev-claude setup!             │
+│                                              │
+│   Jev decide o que o código ramifica.        │
+│   LLM escreve o que a pessoa lê.             │
+│   Custo zero por padrão.                     │
+╰──────────────────────────────────────────────╯
+
+ ✔ Python 3.10+  3.12.10 (ambiente isolado)
+ ✔ SDK do Jev (typesafe-sdk)  instalado
+ ✖ Ollama (LLM local e grátis para texto)  texto grátis precisa de uma LLM local
+   › Instalar o Ollama via winget? (aceita os termos do pacote; licença MIT) (S/n)
+```
+
+| Passo | O que faz |
+| --- | --- |
+| Ollama + servidor + modelo | Instala (winget / Homebrew / script oficial), inicia e baixa o `llama3.2` (~2 GB): texto grátis no `write()`. |
+| Chave do Jev | Opcional. Guarda a chave e o orçamento mensal em `config.json` (padrão US$ 0). |
+| Claude Code | Instalador oficial de claude.ai. |
+| Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
+| Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
+
+```bash
+jev-claude setup            # interativo (também abre sozinho no primeiro `jev-claude`)
+jev-claude setup --yes      # aceita tudo que não exige digitar nada
+jev-claude setup --check    # só verifica; sai com 1 se faltar algo essencial
+jev-claude setup --model qwen2.5:3b   # outro modelo do Ollama
+```
+
+### Instalação manual
 
 ```bash
 pip install "jev-claude[jev] @ git+https://github.com/thiago-lage/jev-claude"
 ```
 
-Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline.
+Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline. Prefira
+um ambiente virtual: o `typesafe-sdk` exige versões recentes de `anyio`/`h11`, que podem
+conflitar com pacotes antigos no Python global.
 
 Exemplo completo, que roda sem configurar nada: [`examples/triagem_suporte.py`](examples/triagem_suporte.py).
 
 ## Configuração (tudo opcional)
+
+O `jev-claude setup` grava `config.json` em `JEV_CLAUDE_HOME`. Variáveis de ambiente sempre
+têm prioridade sobre o arquivo.
 
 | Variável | Padrão | Efeito |
 | --- | --- | --- |
@@ -160,13 +206,14 @@ r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, sys
 ## CLI
 
 ```bash
+jev-claude setup                        # assistente: instala e configura tudo
 jev-claude doctor                       # backends ativos, modelo, orçamento, cache
 jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 jev-claude ask "Preciso disso hoje" --noul "É urgente?"
 jev-claude write "Explique o plano Pro em 2 frases"
 jev-claude models                       # modelos Jev disponíveis na conta
 jev-claude spend                        # gastos registrados por mês
-jev-claude update                       # atualiza typesafe-sdk e redescobre o modelo mais novo
+jev-claude update                       # atualiza jev-claude e typesafe-sdk, redescobre o modelo mais novo
 jev-claude cache clear
 ```
 

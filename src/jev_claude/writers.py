@@ -74,9 +74,7 @@ class OllamaWriter(OpenAICompatibleWriter):
     name = "ollama"
 
     def __init__(self, model: str | None = None, *, host: str | None = None, timeout: float = 300.0) -> None:
-        self.host = (host or os.environ.get("OLLAMA_HOST") or OLLAMA_URL).rstrip("/")
-        if not self.host.startswith(("http://", "https://")):
-            self.host = f"http://{self.host}"
+        self.host = ollama_host(host)
         super().__init__(
             f"{self.host}/v1",
             model or os.environ.get("JEV_CLAUDE_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL,
@@ -85,14 +83,26 @@ class OllamaWriter(OpenAICompatibleWriter):
 
     @staticmethod
     def available(host: str | None = None, timeout: float = 0.3) -> bool:
-        base = (host or os.environ.get("OLLAMA_HOST") or OLLAMA_URL).rstrip("/")
-        if not base.startswith(("http://", "https://")):
-            base = f"http://{base}"
+        return OllamaWriter.models(host, timeout) is not None
+
+    @staticmethod
+    def models(host: str | None = None, timeout: float = 0.3) -> list[str] | None:
+        """Modelos baixados no Ollama, ou `None` se o servidor não responde."""
         try:
-            with urllib.request.urlopen(f"{base}/api/tags", timeout=timeout) as response:
-                return bool(response.status == 200)
+            with urllib.request.urlopen(f"{ollama_host(host)}/api/tags", timeout=timeout) as response:
+                if response.status != 200:
+                    return None
+                data = json.loads(response.read().decode("utf-8"))
         except (OSError, ValueError):
-            return False
+            return None
+        entries = data.get("models") if isinstance(data, dict) else None
+        return [str(m.get("name", "")) for m in entries or [] if isinstance(m, dict)]
+
+
+def ollama_host(host: str | None = None) -> str:
+    """URL base do Ollama: argumento, `OLLAMA_HOST` ou `http://localhost:11434`."""
+    base = (host or os.environ.get("OLLAMA_HOST") or OLLAMA_URL).rstrip("/")
+    return base if base.startswith(("http://", "https://")) else f"http://{base}"
 
 
 class CallableWriter:
@@ -110,11 +120,11 @@ class CallableWriter:
         return self._fn(prompt, system)
 
 
-def auto_writer() -> Writer | None:
+def auto_writer(ollama_model: str | None = None) -> Writer | None:
     """Detecta uma LLM de texto sem custo extra de configuração.
 
     1. `JEV_CLAUDE_LLM_BASE_URL` + `JEV_CLAUDE_LLM_MODEL` (+ `JEV_CLAUDE_LLM_API_KEY` opcional)
-    2. Ollama rodando localmente
+    2. Ollama rodando localmente (modelo: `ollama_model`, `JEV_CLAUDE_OLLAMA_MODEL` ou `llama3.2`)
     3. nenhuma (o `write()` explica como configurar)
     """
     base_url = os.environ.get("JEV_CLAUDE_LLM_BASE_URL", "").strip()
@@ -126,7 +136,7 @@ def auto_writer() -> Writer | None:
             base_url, model, api_key=os.environ.get("JEV_CLAUDE_LLM_API_KEY") or None
         )
     if OllamaWriter.available():
-        return OllamaWriter()
+        return OllamaWriter(ollama_model)
     return None
 
 

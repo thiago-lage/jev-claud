@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.0] - 2026-10-15
+
+### Adicionado
+
+- `jev-claude setup`: assistente no terminal, no estilo do Claude Code, que detecta e instala
+  (com confirmação) Ollama + servidor + modelo, SDK do Jev, Claude Code, skill TypeSafe e a regra
+  global no `~/.claude/CLAUDE.md`. Modos `--yes` e `--check`. Abre sozinho no primeiro `jev-claude`.
+- Instaladores de uma linha: `install.ps1` (Windows) e `install.sh` (macOS/Linux), com ambiente
+  isolado em `~/.local/share/jev-claude` e comando em `~/.local/bin`.
+- `config.json` (chave do Jev, orçamento, modelos), com variáveis de ambiente tendo prioridade.
+- `jev-claude update` também atualiza o próprio jev-claude.
+- CI testa os instaladores em Ubuntu, macOS e Windows.
+
+### Segurança
+
+- O SDK do Jev nunca é instalado automaticamente no Python global (risco de conflito de versões).
+
 ## [0.1.0] - 2026-10-15
 
 ### Adicionado

@@ -106,9 +106,11 @@ class JevClaude:
     ) -> None:
         self.settings = settings or Settings.from_env()
         if jev == "auto":
-            jev = JevBackend() if JevBackend.key_configured() and JevBackend.sdk_available() else None
-            if jev is None and JevBackend.key_configured():
-                logger.warning("TYPESAFE_API_KEY definida, mas o SDK falta: pip install 'jev-claude[jev]'.")
+            key = self.settings.typesafe_api_key
+            has_key = JevBackend.key_configured(key)
+            jev = JevBackend(api_key=key) if has_key and JevBackend.sdk_available() else None
+            if jev is None and has_key:
+                logger.warning("Chave do Jev configurada, mas o SDK falta: pip install 'jev-claude[jev]'.")
         self.jev: JevBackend | None = jev
         self._writer: Writer | Literal["auto"] | None = writer
         self.model_spec = model or self.settings.model
@@ -279,7 +281,7 @@ class JevClaude:
     @property
     def writer(self) -> Writer | None:
         if self._writer == "auto":
-            self._writer = auto_writer()
+            self._writer = auto_writer(self.settings.ollama_model)
         return self._writer
 
     def write(
@@ -334,7 +336,7 @@ class JevClaude:
             "jev": {
                 "sdk_installed": JevBackend.sdk_available(),
                 "sdk_version": JevBackend.sdk_version(),
-                "api_key": JevBackend.key_configured(),
+                "api_key": JevBackend.key_configured(self.settings.typesafe_api_key),
                 "enabled": self.jev is not None and not self.budget.zero_cost,
                 "model_spec": self.model_spec,
             },

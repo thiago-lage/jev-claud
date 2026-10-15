@@ -1,4 +1,4 @@
-"""Linha de comando: `jev-claude doctor | ask | write | models | spend | update | cache`."""
+"""Linha de comando: `jev-claude setup | doctor | ask | write | models | spend | update | cache`."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError, distribution
 from typing import Any
 
 from jev_claude import __version__
@@ -14,17 +15,24 @@ from jev_claude.core import JevClaude
 from jev_claude.errors import JevClaudeError
 from jev_claude.models import forget_newest, resolve_model
 from jev_claude.questions import Question, choice, noul, score
+from jev_claude.wizard import PACKAGE_SPEC, Mode, needs_first_run, run_setup
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if getattr(args, "standalone", None):
+        result: int = args.standalone(args)
+        return result
     if not hasattr(args, "handler"):
+        if argv is None and needs_first_run():
+            # Como o `claude` na primeira vez: abre o assistente em vez da ajuda.
+            return run_setup("interactive", version=__version__)
         parser.print_help()
         return 0
     try:
         with JevClaude() as r:
-            result: int = args.handler(r, args)
+            result = args.handler(r, args)
             return result
     except JevClaudeError as error:
         print(f"erro: {error}", file=sys.stderr)
@@ -38,6 +46,15 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"jev-claude {__version__}")
     sub = parser.add_subparsers()
+
+    setup = sub.add_parser("setup", help="assistente que instala e configura tudo (Ollama, Claude Code, Jev)")
+    setup_mode = setup.add_mutually_exclusive_group()
+    setup_mode.add_argument("-y", "--yes", action="store_true", help="aceita tudo que não exige digitar nada")
+    setup_mode.add_argument(
+        "--check", action="store_true", help="só verifica; sai com 1 se faltar algo essencial"
+    )
+    setup.add_argument("--model", help="modelo do Ollama para texto (padrão: llama3.2)")
+    setup.set_defaults(standalone=_setup)
 
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
@@ -66,7 +83,9 @@ def _parser() -> argparse.ArgumentParser:
     spend = sub.add_parser("spend", help="gastos mensais registrados com o Jev")
     spend.set_defaults(handler=_spend)
 
-    update = sub.add_parser("update", help="atualiza o SDK do Jev e redescobre o modelo mais novo")
+    update = sub.add_parser(
+        "update", help="atualiza o jev-claude, o SDK do Jev e redescobre o modelo mais novo"
+    )
     update.add_argument("--dry-run", action="store_true")
     update.set_defaults(handler=_update)
 
@@ -159,13 +178,31 @@ def _spend(r: JevClaude, args: argparse.Namespace) -> int:
     return 0
 
 
+def _setup(args: argparse.Namespace) -> int:
+    mode: Mode = "yes" if args.yes else "check" if args.check else "interactive"
+    return run_setup(mode, ollama_model=args.model, version=__version__)
+
+
+def _installed_editable() -> bool:
+    """Instalação de desenvolvimento (`pip install -e`): não sobrescrever com a versão do GitHub."""
+    try:
+        raw = distribution("jev-claude").read_text("direct_url.json")
+    except PackageNotFoundError:
+        return True
+    info = json.loads(raw) if raw else {}
+    return bool(info.get("dir_info", {}).get("editable"))
+
+
 def _update(r: JevClaude, args: argparse.Namespace) -> int:
-    command = [sys.executable, "-m", "pip", "install", "--upgrade", "typesafe-sdk"]
-    print("$ " + " ".join(command))
-    if not args.dry_run:
-        completed = subprocess.run(command, check=False)
-        if completed.returncode != 0:
-            return completed.returncode
+    commands = [[sys.executable, "-m", "pip", "install", "--upgrade", "typesafe-sdk"]]
+    if not _installed_editable():
+        commands.append([sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_SPEC])
+    for command in commands:
+        print("$ " + " ".join(command))
+        if not args.dry_run:
+            completed = subprocess.run(command, check=False)
+            if completed.returncode != 0:
+                return completed.returncode
     forget_newest(r.store)
     if r.jev is not None:
         newest = resolve_model("newest", backend=r.jev, store=r.store)
