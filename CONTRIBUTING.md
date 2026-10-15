@@ -31,3 +31,12 @@ pytest --cov
 - Mudou comportamento visível? Atualize o `README.md` e o `CHANGELOG.md`.
 - Integração com o Jev: confira a documentação ao vivo em https://docs.typesafe.ai/llms.txt
   antes de assumir detalhes da API; ela é a fonte da verdade.
+
+## Lançando uma versão
+
+1. Atualize a versão em `pyproject.toml`, `src/jev_claude/__init__.py` e
+   `.claude-plugin/plugin.json`, e escreva a seção `## [X.Y.Z]` no `CHANGELOG.md`.
+2. Com isso na `main`: **Actions -> Release -> Run workflow**, versão `X.Y.Z`.
+   O workflow confere a versão, constrói e testa o wheel, cria a tag `vX.Y.Z` e o release
+   com as notas do CHANGELOG, anexa os arquivos e publica no PyPI (trusted publishing;
+   veja o cabeçalho de `.github/workflows/release.yml` para a configuração única no PyPI).

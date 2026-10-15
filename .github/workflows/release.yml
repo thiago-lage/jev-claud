@@ -1,34 +1,84 @@
 name: Release
 
-# Publica no PyPI quando um release é publicado no GitHub (tag vX.Y.Z).
-# Usa "trusted publishing": o PyPI confia neste workflow, sem token guardado no repositório.
-# Configuração única no PyPI: https://pypi.org/manage/account/publishing/ (pending publisher)
+# Duas formas de lançar uma versão:
+#   1. Actions -> Release -> "Run workflow", informando a versão (ex.: 0.5.0). O workflow cria a
+#      tag vX.Y.Z e o release com as notas do CHANGELOG.md, anexa o wheel e publica no PyPI.
+#   2. Criar o release pela interface do GitHub (tag vX.Y.Z): o workflow publica no PyPI.
+#
+# Versão antiga (ex.: 0.3.1): informe `target` com o commit e desmarque `publish`; só o release
+# no GitHub é criado.
+#
+# PyPI por "trusted publishing", sem token guardado no repositório. Configuração única em
+# https://pypi.org/manage/account/publishing/ (pending publisher):
 #   projeto: jev-claude · dono: thiago-lage · repositório: jev-claude
 #   workflow: release.yml · ambiente: pypi
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão sem o v (ex.: 0.5.0)"
+        required: true
+      target:
+        description: "Commit ou branch da tag (padrão: o commit deste disparo)"
+        required: false
+        default: ""
+      publish:
+        description: "Construir, anexar o wheel e publicar no PyPI"
+        type: boolean
+        default: true
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      target: ${{ steps.plan.outputs.target }}
+      publish: ${{ steps.plan.outputs.publish }}
+      create: ${{ steps.plan.outputs.create }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          if [ "$EVENT" = "release" ]; then
+            version="${GITHUB_REF_NAME#v}"; target="$GITHUB_SHA"; publish=true; create=false
+          else
+            version="${INPUT_VERSION#v}"; target="${INPUT_TARGET:-$GITHUB_SHA}"; publish="$INPUT_PUBLISH"; create=true
+          fi
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([a-z0-9.]*)?$'; then
+            echo "::error::Versão inválida: '$version'"; exit 1
+          fi
+          {
+            echo "version=$version"; echo "target=$target"; echo "publish=$publish"; echo "create=$create"
+          } >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.target }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Confere a versão da tag
-        if: github.event_name == 'release'
+      - name: Confere a versão
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          tag="${GITHUB_REF_NAME#v}"
-          if [ "$version" != "$tag" ]; then
-            echo "::error::A tag ($GITHUB_REF_NAME) não bate com a versão do pyproject.toml ($version)."
+          found=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$found" != "$VERSION" ]; then
+            echo "::error::A versão pedida ($VERSION) não bate com o pyproject.toml ($found)."
             exit 1
           fi
       - run: pip install build twine
@@ -45,8 +95,49 @@ jobs:
           name: dist
           path: dist/
 
+  github:
+    needs: [plan, build]
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      TARGET: ${{ needs.plan.outputs.target }}
+    steps:
+      - uses: actions/checkout@v7  # o CHANGELOG mais novo, mesmo para versões antigas
+      - name: Notas do CHANGELOG
+        run: |
+          python3 - <<'PY'
+          import os, re, pathlib
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          if not match:
+              raise SystemExit(f"::error::Seção [{version}] não encontrada no CHANGELOG.md")
+          pathlib.Path("notes.md").write_text(match.group(1).strip() + "\n", encoding="utf-8")
+          PY
+      - name: Cria a tag e o release
+        if: needs.plan.outputs.create == 'true'
+        run: |
+          latest=$([ "${{ needs.plan.outputs.publish }}" = "true" ] && echo true || echo false)
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$TARGET" \
+            --title "v$VERSION" --notes-file notes.md --latest="$latest"
+      - uses: actions/download-artifact@v4
+        if: needs.build.result == 'success'
+        with:
+          name: dist
+          path: dist/
+      - name: Anexa o wheel e o sdist
+        if: needs.build.result == 'success'
+        run: gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
   pypi:
-    needs: build
+    needs: [plan, build, github]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -59,19 +150,3 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
-
-  assets:
-    if: github.event_name == 'release'
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - name: Anexa o wheel e o sdist ao release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
