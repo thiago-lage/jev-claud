@@ -1,6 +1,6 @@
 """Linha de comando do jev-claud.
 
-Subcomandos: setup, mcp, compact, run, hook, doctor, ask, write, models, spend, update, cache.
+Subcomandos: setup, mcp, compact, run, hook, rule, doctor, ask, write, models, spend, update, cache.
 """
 
 from __future__ import annotations
@@ -82,6 +82,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     hook.add_argument("name", choices=["pre-bash"])
     hook.set_defaults(standalone=_hook)
+
+    rule = sub.add_parser(
+        "rule", help="mostra a regra 'código ramifica -> Jev; pessoa lê -> LLM' para colar em outro agente"
+    )
+    rule.set_defaults(standalone=_rule)
 
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
@@ -308,6 +313,15 @@ def _run(args: argparse.Namespace) -> int:
 
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     return run_command(command, _utf8_streams()[1])
+
+
+def _rule(args: argparse.Namespace) -> int:
+    """A mesma regra que o setup grava no CLAUDE.md e no AGENTS.md (no Cursor, cole em Settings › Rules)."""
+    from jev_claud.wizard import CLAUDE_RULE
+
+    _, out = _utf8_streams()
+    print(CLAUDE_RULE, end="", file=out)
+    return 0
 
 
 def _hook(args: argparse.Namespace) -> int:

@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] - 2026-10-15
+
+### Adicionado
+
+- **Cursor e Codex no `jev-claud setup`.** Quando estão instalados, o setup oferece configurá-los:
+  - Cursor: o servidor MCP do jev-claud no `~/.cursor/mcp.json`.
+  - Codex: o servidor MCP na tabela `[mcp_servers.jev-claud]` do `config.toml` e a regra global
+    no `AGENTS.md`, ou no `AGENTS.override.md`, se ele estiver em uso. Respeita o `$CODEX_HOME`.
+  - Em todos os casos o setup troca só a entrada do jev-claud e preserva o resto do arquivo. O TOML
+    é conferido antes de gravar, e um arquivo que não dá para ler com segurança fica como está.
+- `jev-claud rule` mostra a regra "Jev ramifica, LLM escreve", para colar onde não há arquivo de
+  regras globais (como em *Cursor Settings › Rules*).
+
+### Alterado
+
+- Regra global na versão 4, com texto que vale para qualquer agente. O `setup` atualiza o bloco no
+  `~/.claude/CLAUDE.md`.
+
 ## [0.8.2] - 2026-10-15
 
 ### Alterado

@@ -246,8 +246,10 @@ também, perguntando antes de cada passo, como faz com o Claude Code:
 | Passo | Cursor | Codex |
 | --- | --- | --- |
 | Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | `~/.cursor/mcp.json` | tabela `[mcp_servers.jev-claud]` no `~/.codex/config.toml` |
-| Regra "Jev ramifica, LLM escreve" | cole o bloco da regra em *Cursor Settings › Rules* | `~/.codex/AGENTS.md` |
+| Regra "Jev ramifica, LLM escreve" | `jev-claud rule` mostra o texto; cole em *Cursor Settings › Rules* (o Cursor não tem arquivo de regras globais) | `~/.codex/AGENTS.md` (ou o `AGENTS.override.md`, se você usa um) |
 
+- No Cursor, reinicie depois do setup e confira em *Settings › Tools & MCP* se o jev-claud está
+  ligado.
 - O Codex usa `$CODEX_HOME` no lugar de `~/.codex`, se a variável estiver definida.
 - O setup preserva o resto de cada arquivo e troca só a entrada do jev-claud (por exemplo, a de
   outro ambiente virtual). Um arquivo que ele não consiga ler com segurança fica como está.
@@ -393,7 +395,8 @@ r = JevClaud(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, syst
 
 ```bash
 jev-claud setup                        # assistente: instala e configura tudo
-jev-claud mcp                          # servidor MCP (stdio) usado pelo Claude Code
+jev-claud mcp                          # servidor MCP (stdio) usado pelo Claude Code, Cursor e Codex
+jev-claud rule                         # a regra "Jev ramifica, LLM escreve" para colar em outro agente
 jev-claud run -- pytest -x            # roda teste/build e compacta a saída (sem LLM)
 npm test 2>&1 | jev-claud compact     # o mesmo, como filtro de texto
 jev-claud doctor                       # backends ativos, modelo, orçamento, cache

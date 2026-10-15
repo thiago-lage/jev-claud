@@ -580,7 +580,7 @@ def agents_system(tmp_path: Path) -> FakeSystem:
     return system
 
 
-CURSOR_ENTRY = {"command": "python", "args": ["-m", "jev_claud", "mcp"]}
+CURSOR_ENTRY = {"type": "stdio", "command": "python", "args": ["-m", "jev_claud", "mcp"]}
 CODEX_BLOCK = '[mcp_servers.jev-claud]\ncommand = "python"\nargs = ["-m", "jev_claud", "mcp"]\n'
 
 
@@ -661,3 +661,20 @@ def test_codex_config_that_would_break_is_left_alone(tmp_path: Path) -> None:
     assert Setup(system=system, ui=ui)._install_codex_mcp() is False
     assert config.read_text(encoding="utf-8") == inline
     assert "não está no formato esperado" in out.getvalue()
+
+
+def test_codex_rule_goes_to_the_override_when_codex_reads_it(tmp_path: Path) -> None:
+    """Com um AGENTS.override.md não vazio, o Codex ignora o AGENTS.md: a regra vai para o override."""
+    system = agents_system(tmp_path)
+    override = tmp_path / "codex" / "AGENTS.override.md"
+    override.parent.mkdir()
+    override.write_text("# Minhas regras do Codex\n", encoding="utf-8")
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui).run("yes").results["codex_rule"] is True
+    assert override.read_text(encoding="utf-8") == f"# Minhas regras do Codex\n\n{CLAUDE_RULE}"
+    assert not (tmp_path / "codex" / "AGENTS.md").exists()
+
+
+def test_cli_rule_prints_the_same_rule(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["rule"]) == 0
+    assert capsys.readouterr().out == CLAUDE_RULE

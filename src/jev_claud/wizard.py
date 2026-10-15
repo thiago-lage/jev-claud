@@ -1010,14 +1010,12 @@ class Setup:
             self.ui.warn(f"Não mexi em {path}: o conteúdo não está no formato esperado.")
             return False
         current = servers.get(MCP_NAME)
-        entry = {
-            **(current if isinstance(current, dict) else {}),
-            "command": self.sys.python,
-            "args": list(MCP_ARGS),
-        }
+        base = current if isinstance(current, dict) else {}
+        entry = {**base, "type": "stdio", "command": self.sys.python, "args": list(MCP_ARGS)}
         data["mcpServers"] = {**servers, MCP_NAME: entry}
         _write_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
-        self.ui.note("No Cursor, confira em Settings > MCP se o jev-claud está ligado.")
+        self.ui.note("Reinicie o Cursor e confira em Settings › Tools & MCP se o jev-claud está ligado.")
+        self.ui.note("A regra fica em Settings › Rules: `jev-claud rule` mostra o texto para colar.")
         return True
 
     def _codex_block(self) -> str:
@@ -1053,11 +1051,18 @@ class Setup:
         self.ui.note("Vale para as próximas sessões do Codex.")
         return True
 
+    def _codex_rule_path(self) -> Path:
+        """O Codex lê o AGENTS.override.md no lugar do AGENTS.md quando ele existe e não está vazio."""
+        override = self._codex_dir() / "AGENTS.override.md"
+        if self.sys.exists(override) and override.read_text(encoding="utf-8").strip():
+            return override
+        return self._codex_dir() / "AGENTS.md"
+
     def _check_codex_rule(self) -> tuple[bool, str]:
-        return self._rule_state(self._codex_dir() / "AGENTS.md", "o Codex não sabe quando usar Jev ou LLM")
+        return self._rule_state(self._codex_rule_path(), "o Codex não sabe quando usar Jev ou LLM")
 
     def _write_codex_rule(self) -> bool:
-        return self._write_rule_to(self._codex_dir() / "AGENTS.md")
+        return self._write_rule_to(self._codex_rule_path())
 
 
 def savings_footer() -> str | None:
