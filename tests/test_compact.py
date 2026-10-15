@@ -184,7 +184,13 @@ def test_run_refuses_unknown_commands(tmp_path: Path) -> None:
     assert tmp_path.exists()
 
 
-def test_run_reports_missing_program() -> None:
+def test_run_reports_missing_program(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Simulado: no Windows o CreateProcess busca no PATH do processo pai, então um PATH vazio
+    # no ambiente não garante "não encontrado" (o runner do GitHub tem dotnet instalado).
+    def missing(*args: object, **kwargs: object) -> None:
+        raise FileNotFoundError(2, "não encontrado")
+
+    monkeypatch.setattr("jev_claude.compact.subprocess.run", missing)
     out = io.StringIO()
     assert run_command(["dotnet", "test"], out, env={"PATH": ""}) == 127
     assert "não foi possível executar dotnet" in out.getvalue()
