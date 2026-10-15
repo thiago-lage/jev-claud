@@ -124,8 +124,13 @@ jobs:
         if: needs.plan.outputs.create == 'true'
         run: |
           latest=$([ "${{ needs.plan.outputs.publish }}" = "true" ] && echo true || echo false)
-          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$TARGET" \
-            --title "v$VERSION" --notes-file notes.md --latest="$latest"
+          # A mensagem do gh vira anotação: fica visível no resumo da execução e pela API.
+          if ! out=$(gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$TARGET" \
+            --title "v$VERSION" --notes-file notes.md --latest="$latest" 2>&1); then
+            echo "::error title=gh release create::${out//$'\n'/%0A}"
+            exit 1
+          fi
+          echo "$out"
       - uses: actions/download-artifact@v4
         if: needs.build.result == 'success'
         with:
@@ -133,7 +138,11 @@ jobs:
           path: dist/
       - name: Anexa o wheel e o sdist
         if: needs.build.result == 'success'
-        run: gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+        run: |
+          if ! out=$(gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber 2>&1); then
+            echo "::error title=gh release upload::${out//$'\n'/%0A}"
+            exit 1
+          fi
 
   pypi:
     needs: [plan, build, github]
