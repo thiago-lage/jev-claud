@@ -1,8 +1,8 @@
-# ramifica
+# jev-claude
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**
 
-`ramifica` separa as duas saídas de IA que um app tem:
+Este repositório publica a biblioteca Python `ramifica`, que separa as duas saídas de IA que um app tem:
 
 | Quem consome a resposta? | Use | Motor | Por quê |
 | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ pip install -e ".[jev]"
 Ou direto do GitHub, depois de publicado:
 
 ```bash
-pip install "ramifica[jev] @ git+https://github.com/thiago-lage/ramifica"
+pip install "ramifica[jev] @ git+https://github.com/thiago-lage/jev-claude"
 ```
 
 Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline.
