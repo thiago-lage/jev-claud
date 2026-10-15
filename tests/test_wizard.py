@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -569,3 +570,111 @@ def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Pat
     assert "duplicado: o jevin@synced do diretório só carrega sem o jevin@jev-claud" in out.getvalue()
     assert "/bin/claude plugin uninstall jevin@jev-claud" in [" ".join(c) for c in system.commands]
     assert report.results["plugin"] is True and system.state["plugin"] is False
+
+
+def agents_system(tmp_path: Path) -> FakeSystem:
+    """Claude Code pronto; Cursor e Codex instalados (CODEX_HOME aponta para a pasta de teste)."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.tools |= {"cursor", "codex"}
+    system.env = {**system.env, "CODEX_HOME": str(tmp_path / "codex")}
+    return system
+
+
+CURSOR_ENTRY = {"type": "stdio", "command": "python", "args": ["-m", "jev_claud", "mcp"]}
+CODEX_BLOCK = '[mcp_servers.jev-claud]\ncommand = "python"\nargs = ["-m", "jev_claud", "mcp"]\n'
+
+
+def test_cursor_and_codex_steps_only_when_installed(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    ui, _ = make_ui()
+    assert not {"cursor_mcp", "codex_mcp", "codex_rule"} & {
+        s.key for s in Setup(system=system, ui=ui).steps()
+    }
+    (system.home / ".cursor").mkdir(parents=True)  # o Cursor cria essa pasta, mesmo sem o comando no PATH
+    assert "cursor_mcp" in {s.key for s in Setup(system=system, ui=ui).steps()}
+    system.tools.add("codex")
+    assert {"codex_mcp", "codex_rule"} <= {s.key for s in Setup(system=system, ui=ui).steps()}
+
+
+def test_cursor_mcp_is_registered_preserving_the_rest(tmp_path: Path) -> None:
+    system = agents_system(tmp_path)
+    mcp = system.home / ".cursor" / "mcp.json"
+    mcp.parent.mkdir(parents=True)
+    other = {"command": "npx", "args": ["outro-servidor"]}
+    mcp.write_text(json.dumps({"mcpServers": {"outro": other}, "extra": 1}), encoding="utf-8")
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui).run("yes").results["cursor_mcp"] is True
+    after = json.loads(mcp.read_text(encoding="utf-8"))
+    assert after == {"mcpServers": {"outro": other, "jev-claud": CURSOR_ENTRY}, "extra": 1}
+
+    mcp.write_text("{ quebrado", encoding="utf-8")
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui).run("yes").results["cursor_mcp"] is False
+    assert mcp.read_text(encoding="utf-8") == "{ quebrado"
+    assert "não está no formato esperado" in out.getvalue()
+
+
+def test_codex_gets_the_mcp_table_and_the_rule(tmp_path: Path) -> None:
+    system = agents_system(tmp_path)
+    config = tmp_path / "codex" / "config.toml"
+    config.parent.mkdir()
+    mine = 'model = "gpt-5"\n\n[mcp_servers.outro]\ncommand = "npx"\nargs = ["x"]\n'
+    config.write_text(mine, encoding="utf-8")
+    ui, _ = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    assert report.results["codex_mcp"] is True and report.results["codex_rule"] is True
+    assert config.read_text(encoding="utf-8") == mine + "\n" + CODEX_BLOCK
+    assert CLAUDE_RULE in (tmp_path / "codex" / "AGENTS.md").read_text(encoding="utf-8")
+    Setup(system=system, ui=ui).run("yes")  # rodar de novo não duplica
+    assert config.read_text(encoding="utf-8") == mine + "\n" + CODEX_BLOCK
+
+
+def test_codex_old_entry_is_replaced_in_place(tmp_path: Path) -> None:
+    system = agents_system(tmp_path)
+    config = tmp_path / "codex" / "config.toml"
+    config.parent.mkdir()
+    old = '[mcp_servers."jev-claud"]\ncommand = "/velho/python"\nargs = ["-m", "jev_claud", "mcp"]\n'
+    config.write_text(old + "\n[outra]\nchave = 1\n", encoding="utf-8")
+    ui, _ = make_ui()
+    setup = Setup(system=system, ui=ui)
+    assert setup._check_codex_mcp() == (False, "aponta para outra instalação do jev-claud")
+    assert setup._install_codex_mcp() is True
+    assert config.read_text(encoding="utf-8") == CODEX_BLOCK + "\n[outra]\nchave = 1\n"
+
+
+@pytest.mark.skipif(sys.version_info < (3, 11), reason="tomllib só existe a partir do Python 3.11")
+def test_codex_config_that_would_break_is_left_alone(tmp_path: Path) -> None:
+    import tomllib
+
+    system = agents_system(tmp_path)
+    system.python = "C:\\Users\\Ana Lima\\venv\\Scripts\\python.exe"  # barras invertidas e espaço
+    config = tmp_path / "codex" / "config.toml"
+    config.parent.mkdir()
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui)._install_codex_mcp() is True
+    parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+    assert parsed["mcp_servers"]["jev-claud"]["command"] == system.python
+
+    inline = 'mcp_servers = { outro = { command = "npx" } }\n'  # acrescentar a tabela quebraria o TOML
+    config.write_text(inline, encoding="utf-8")
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui)._install_codex_mcp() is False
+    assert config.read_text(encoding="utf-8") == inline
+    assert "não está no formato esperado" in out.getvalue()
+
+
+def test_codex_rule_goes_to_the_override_when_codex_reads_it(tmp_path: Path) -> None:
+    """Com um AGENTS.override.md não vazio, o Codex ignora o AGENTS.md: a regra vai para o override."""
+    system = agents_system(tmp_path)
+    override = tmp_path / "codex" / "AGENTS.override.md"
+    override.parent.mkdir()
+    override.write_text("# Minhas regras do Codex\n", encoding="utf-8")
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui).run("yes").results["codex_rule"] is True
+    assert override.read_text(encoding="utf-8") == f"# Minhas regras do Codex\n\n{CLAUDE_RULE}"
+    assert not (tmp_path / "codex" / "AGENTS.md").exists()
+
+
+def test_cli_rule_prints_the_same_rule(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["rule"]) == 0
+    assert capsys.readouterr().out == CLAUDE_RULE

@@ -22,6 +22,7 @@ import getpass
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -49,6 +50,7 @@ PLUGIN_ID = f"jevin@{PLUGIN_MARKETPLACE}"
 # Com ele ativo, a cópia do marketplace jev-claud impede o carregamento: fica só um dos dois.
 PLUGIN_SYNCED_ID = "jevin@synced"
 MCP_NAME = "jev-claud"
+MCP_ARGS = ("-m", "jev_claud", "mcp")
 RULE_START = "<!-- jev-claud:start -->"
 RULE_END = "<!-- jev-claud:end -->"
 # Nomes até a 0.6 (o projeto se chamava jev-claude): o setup migra cada um deles.
@@ -56,7 +58,7 @@ OLD_MARKETPLACE = "jev-claude"
 OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
-RULE_VERSION = 3
+RULE_VERSION = 4
 CLAUDE_RULE = f"""{RULE_START}
 <!-- versão {RULE_VERSION}: o `jev-claud setup` substitui este bloco inteiro ao atualizar -->
 ## Como trabalhar
@@ -74,15 +76,16 @@ CLAUDE_RULE = f"""{RULE_START}
 - Saída que **uma pessoa vai ler**: use **LLM** (`JevClaud.write`, Ollama local por padrão).
 - Regras conhecidas, cálculos e buscas exatas ficam em código puro.
 - Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claud setup`).
-- Leia https://docs.typesafe.ai/llms.txt e use a skill `typesafe:typesafe-ai` ao integrar.
+- Ao integrar, leia https://docs.typesafe.ai/llms.txt (no Claude Code, use também a skill
+  `typesafe:typesafe-ai`).
 
 ## Poupar contexto
 
 - Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
   MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
 - Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
-- Saídas longas de testes e builds já chegam compactadas pelo hook do jev-claud; a saída completa
-  fica no caminho indicado no rodapé, se precisar.
+- Saída de teste ou build com o rodapé `[jev-claud] saída compactada`: a saída completa está no
+  caminho indicado ali, se precisar.
 {RULE_END}
 """
 
@@ -266,6 +269,54 @@ def _listed(output: str, name: str) -> bool:
     return any(name in line.replace("❯", " ").split() for line in output.splitlines())
 
 
+def _load_json_object(path: Path) -> dict[str, Any] | None:
+    """Objeto JSON de um arquivo de configuração; {} se não existe, None se não dá para editar."""
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Grava num arquivo temporário e troca de uma vez: nunca deixa a configuração pela metade."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".jev-claud.tmp")
+    partial.write_text(text, encoding="utf-8")
+    os.replace(partial, path)
+
+
+def _toml_string(value: str) -> str:
+    """String TOML básica (as regras de escape do JSON servem para os caracteres usados aqui)."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_table_span(text: str, name: str) -> tuple[int, int] | None:
+    """Início e fim da tabela `[name]` (até o próximo cabeçalho), ou None se não existe."""
+    first, _, rest = name.partition(".")
+    quoted = rf'(?:{re.escape(rest)}|"{re.escape(rest)}")' if rest else ""
+    header = re.compile(rf"^\[\s*{re.escape(first)}\s*\.\s*{quoted}\s*\][ \t]*(?:#.*)?$", re.M)
+    found = header.search(text)
+    if found is None:
+        return None
+    following = re.compile(r"^\s*\[", re.M).search(text, found.end())
+    return found.start(), following.start() if following else len(text)
+
+
+def _valid_toml(text: str) -> bool:
+    """Confere o TOML antes de gravar (Python 3.11+; no 3.10 não há leitor na biblioteca padrão)."""
+    if sys.version_info >= (3, 11):
+        import tomllib
+
+        try:
+            tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            return False
+    return True
+
+
 def _pre_tool_hooks(settings: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Hooks `PreToolUse` do settings.json, ignorando o que não tiver o formato esperado."""
     hooks = settings.get("hooks")
@@ -428,7 +479,7 @@ class Setup:
 
     def steps(self) -> list[Step]:
         global_python = not self.sys.in_venv
-        return [
+        steps = [
             Step("python", "Python 3.10+", self._check_python),
             Step(
                 "sdk",
@@ -530,6 +581,38 @@ class Setup:
                 essential=False,
             ),
         ]
+        # Outros agentes: só aparecem quando estão instalados neste computador.
+        if self._has_cursor():
+            steps.append(
+                Step(
+                    "cursor_mcp",
+                    "Cursor: ferramentas MCP do jev-claud",
+                    self._check_cursor_mcp,
+                    self._install_cursor_mcp,
+                    "Registrar o jev-claud como servidor MCP do Cursor?",
+                    essential=False,
+                )
+            )
+        if self._has_codex():
+            steps += [
+                Step(
+                    "codex_mcp",
+                    "Codex: ferramentas MCP do jev-claud",
+                    self._check_codex_mcp,
+                    self._install_codex_mcp,
+                    "Registrar o jev-claud como servidor MCP do Codex?",
+                    essential=False,
+                ),
+                Step(
+                    "codex_rule",
+                    "Codex: regra global no AGENTS.md",
+                    self._check_codex_rule,
+                    self._write_codex_rule,
+                    "Adicionar a regra 'código ramifica -> Jev; pessoa lê -> LLM' ao Codex?",
+                    essential=False,
+                ),
+            ]
+        return steps
 
     # -- Python e SDK --------------------------------------------------------------
 
@@ -811,13 +894,7 @@ class Setup:
 
     def _read_settings(self) -> dict[str, Any] | None:
         """settings.json do Claude Code; {} se não existe, None se não dá para editar com segurança."""
-        if not self.sys.exists(self.claude_settings):
-            return {}
-        try:
-            data = json.loads(self.claude_settings.read_text(encoding="utf-8") or "{}")
-        except (OSError, ValueError):
-            return None
-        return data if isinstance(data, dict) else None
+        return _load_json_object(self.claude_settings)
 
     def _check_hook(self) -> tuple[bool, str]:
         settings = self._read_settings()
@@ -855,28 +932,32 @@ class Setup:
         settings["hooks"] = {**hooks, "PreToolUse": kept}
         if self.sys.platform == "win32":
             self._write_bash_shim()
-        self.claude_settings.parent.mkdir(parents=True, exist_ok=True)
-        partial = self.claude_settings.with_name(self.claude_settings.name + ".jev-claud.tmp")
-        partial.write_text(json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        os.replace(partial, self.claude_settings)
+        _write_atomic(self.claude_settings, json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
         self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
         return True
 
     # -- regra global ------------------------------------------------------------------
 
     def _check_rule(self) -> tuple[bool, str]:
-        if self.sys.exists(self.claude_md):
-            text = self.claude_md.read_text(encoding="utf-8")
-            if CLAUDE_RULE.strip() in text:
-                return True, str(self.claude_md)
-            if RULE_START in text or OLD_RULE_MARKERS[0] in text:
-                return False, "versão antiga: atualizar"
-        return False, "Claude não sabe quando usar Jev ou LLM"
+        return self._rule_state(self.claude_md, "Claude não sabe quando usar Jev ou LLM")
 
     def _write_rule(self) -> bool:
+        return self._write_rule_to(self.claude_md)
+
+    def _rule_state(self, path: Path, missing: str) -> tuple[bool, str]:
+        """A regra está em `path` na versão atual? (CLAUDE.md, AGENTS.md...)"""
+        if self.sys.exists(path):
+            text = path.read_text(encoding="utf-8")
+            if CLAUDE_RULE.strip() in text:
+                return True, str(path)
+            if RULE_START in text or OLD_RULE_MARKERS[0] in text:
+                return False, "versão antiga: atualizar"
+        return False, missing
+
+    def _write_rule_to(self, path: Path) -> bool:
         """Acrescenta a regra ou troca o bloco antigo entre os marcadores, preservando o resto."""
-        self.claude_md.parent.mkdir(parents=True, exist_ok=True)
-        current = self.claude_md.read_text(encoding="utf-8") if self.claude_md.exists() else ""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        current = path.read_text(encoding="utf-8") if path.exists() else ""
         for start_marker, end_marker in ((RULE_START, RULE_END), OLD_RULE_MARKERS):
             start = current.find(start_marker)
             end = current.find(end_marker, start)
@@ -884,12 +965,104 @@ class Setup:
                 break
         if start != -1 and end != -1:
             tail = current[end + len(end_marker) :].removeprefix("\n")
-            self.claude_md.write_text(current[:start] + CLAUDE_RULE + tail, encoding="utf-8")
+            path.write_text(current[:start] + CLAUDE_RULE + tail, encoding="utf-8")
             return True
         separator = "\n" if current and not current.endswith("\n") else ""
         spacer = "\n" if current else ""
-        self.claude_md.write_text(current + separator + spacer + CLAUDE_RULE, encoding="utf-8")
+        path.write_text(current + separator + spacer + CLAUDE_RULE, encoding="utf-8")
         return True
+
+    # -- Cursor e Codex ------------------------------------------------------------------
+    # As mesmas ferramentas MCP e a mesma regra, para quem também usa esses agentes. Os arquivos
+    # de configuração são editados preservando o resto, como o settings.json do Claude Code.
+
+    def _cursor_dir(self) -> Path:
+        return self.sys.home / ".cursor"
+
+    def _codex_dir(self) -> Path:
+        custom = self.sys.env.get("CODEX_HOME", "").strip()
+        return Path(custom).expanduser() if custom else self.sys.home / ".codex"
+
+    def _has_cursor(self) -> bool:
+        return bool(self.sys.which("cursor")) or self.sys.exists(self._cursor_dir())
+
+    def _has_codex(self) -> bool:
+        return bool(self.sys.which("codex")) or self.sys.exists(self._codex_dir())
+
+    def _check_cursor_mcp(self) -> tuple[bool, str]:
+        path = self._cursor_dir() / "mcp.json"
+        data = _load_json_object(path)
+        if data is None:
+            return False, f"{path} não é um JSON válido"
+        servers = data.get("mcpServers")
+        entry = servers.get(MCP_NAME) if isinstance(servers, dict) else None
+        if not isinstance(entry, dict):
+            return False, "o Cursor ainda não usa as ferramentas do jev-claud"
+        if entry.get("command") != self.sys.python or entry.get("args") != list(MCP_ARGS):
+            return False, "aponta para outra instalação do jev-claud"
+        return True, "ferramentas decide, classify, rank, summarize_file, write"
+
+    def _install_cursor_mcp(self) -> bool:
+        path = self._cursor_dir() / "mcp.json"
+        data = _load_json_object(path)
+        servers = data.get("mcpServers", {}) if data is not None else None
+        if data is None or not isinstance(servers, dict):
+            self.ui.warn(f"Não mexi em {path}: o conteúdo não está no formato esperado.")
+            return False
+        current = servers.get(MCP_NAME)
+        base = current if isinstance(current, dict) else {}
+        entry = {**base, "type": "stdio", "command": self.sys.python, "args": list(MCP_ARGS)}
+        data["mcpServers"] = {**servers, MCP_NAME: entry}
+        _write_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        self.ui.note("Reinicie o Cursor e confira em Settings › Tools & MCP se o jev-claud está ligado.")
+        self.ui.note("A regra fica em Settings › Rules: `jev-claud rule` mostra o texto para colar.")
+        return True
+
+    def _codex_block(self) -> str:
+        args = ", ".join(_toml_string(arg) for arg in MCP_ARGS)
+        return f"[mcp_servers.{MCP_NAME}]\ncommand = {_toml_string(self.sys.python)}\nargs = [{args}]\n"
+
+    def _check_codex_mcp(self) -> tuple[bool, str]:
+        path = self._codex_dir() / "config.toml"
+        text = path.read_text(encoding="utf-8") if self.sys.exists(path) else ""
+        span = _toml_table_span(text, f"mcp_servers.{MCP_NAME}")
+        if span is None:
+            return False, "o Codex ainda não usa as ferramentas do jev-claud"
+        if text[span[0] : span[1]].strip() != self._codex_block().strip():
+            return False, "aponta para outra instalação do jev-claud"
+        return True, "ferramentas decide, classify, rank, summarize_file, write"
+
+    def _install_codex_mcp(self) -> bool:
+        path = self._codex_dir() / "config.toml"
+        text = path.read_text(encoding="utf-8") if self.sys.exists(path) else ""
+        span = _toml_table_span(text, f"mcp_servers.{MCP_NAME}")
+        if span is not None:  # troca só a tabela do jev-claud; o que vem depois fica igual
+            after = text[span[1] :].lstrip("\n")
+            updated = text[: span[0]] + self._codex_block() + ("\n" + after if after else "")
+        elif text.strip():  # no fim do arquivo, separada por uma linha em branco
+            trailing = len(text) - len(text.rstrip("\n"))
+            updated = text + "\n" * max(0, 2 - trailing) + self._codex_block()
+        else:
+            updated = self._codex_block()
+        if not _valid_toml(updated):
+            self.ui.warn(f"Não mexi em {path}: o conteúdo não está no formato esperado.")
+            return False
+        _write_atomic(path, updated)
+        self.ui.note("Vale para as próximas sessões do Codex.")
+        return True
+
+    def _codex_rule_path(self) -> Path:
+        """O Codex lê o AGENTS.override.md no lugar do AGENTS.md quando ele existe e não está vazio."""
+        override = self._codex_dir() / "AGENTS.override.md"
+        if self.sys.exists(override) and override.read_text(encoding="utf-8").strip():
+            return override
+        return self._codex_dir() / "AGENTS.md"
+
+    def _check_codex_rule(self) -> tuple[bool, str]:
+        return self._rule_state(self._codex_rule_path(), "o Codex não sabe quando usar Jev ou LLM")
+
+    def _write_codex_rule(self) -> bool:
+        return self._write_rule_to(self._codex_rule_path())
 
 
 def savings_footer() -> str | None:
