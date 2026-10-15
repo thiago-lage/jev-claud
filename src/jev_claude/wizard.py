@@ -92,7 +92,7 @@ class System:
     def spawn(self, command: Sequence[str]) -> None:
         """Inicia um processo em segundo plano que sobrevive ao assistente."""
         kwargs: dict[str, Any] = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-        if self.platform == "win32":
+        if sys.platform == "win32":  # checagem estática: as constantes só existem no Windows
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs["start_new_session"] = True
