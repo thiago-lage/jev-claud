@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-10-15
+
+### Adicionado
+
+- Servidor MCP (`jev-claude mcp`, sem dependências): o Claude Code delega trabalho em lote ao
+  Jev e ao Ollama local com as ferramentas `decide`, `classify`, `rank`, `summarize_file`,
+  `write` e `status`. Os dados volumosos são lidos localmente e não entram no contexto do Claude.
+- `jev-claude setup` registra o servidor MCP no Claude Code (`claude mcp add -s user`).
+- `python -m jev_claude`.
+
 ## [0.2.0] - 2026-10-15
 
 ### Adicionado

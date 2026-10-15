@@ -7,7 +7,8 @@ Detecta o que falta, explica para que serve e pergunta antes de instalar cada pe
 3. Ollama + servidor + modelo         texto grátis na sua máquina
 4. Chave e orçamento do Jev           opcional; guardados em `config.json`
 5. Claude Code + skill TypeSafe       o agente que usa tudo isso
-6. Regra global no `~/.claude/CLAUDE.md`
+6. Servidor MCP `jev-claude`          o Claude delega lotes ao Jev/Ollama e economiza tokens
+7. Regra global no `~/.claude/CLAUDE.md`
 
 Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e `--check`
 (só verifica; código de saída 1 se faltar algo essencial).
@@ -45,6 +46,9 @@ CLAUDE_RULE = f"""{RULE_START}
   (`from jev_claude import JevClaude`). Não peça JSON a uma LLM para depois fazer parse.
 - Saída que **uma pessoa vai ler**: use **LLM** (`JevClaude.write`, Ollama local por padrão).
 - Regras conhecidas, cálculos e buscas exatas ficam em código puro.
+- Para economizar tokens, use as ferramentas MCP `jev-claude` em trabalho em lote: `classify`,
+  `rank` e `summarize_file` recebem o CAMINHO do arquivo (os dados não entram no contexto);
+  `write` gera rascunhos com o Ollama local. Para perguntas pequenas e únicas, responda direto.
 - Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claude setup`).
 - Leia https://docs.typesafe.ai/llms.txt e use a skill `typesafe:typesafe-ai` ao integrar.
 {RULE_END}
@@ -419,6 +423,15 @@ class Setup:
                 essential=False,
             ),
             Step(
+                "mcp",
+                "Servidor MCP no Claude Code (economiza tokens)",
+                self._check_mcp,
+                self._install_mcp,
+                "Registrar o jev-claude como servidor MCP do Claude Code?",
+                requires=("claude",),
+                essential=False,
+            ),
+            Step(
                 "rule",
                 "Regra global no ~/.claude/CLAUDE.md",
                 self._check_rule,
@@ -609,6 +622,42 @@ class Setup:
             if added != 0:
                 return False
         return self.sys.run([path, "plugin", "install", "typesafe@typesafe-ai"]) == 0
+
+    def _check_mcp(self) -> tuple[bool, str]:
+        path = self._claude()
+        if not path:
+            return False, "precisa do Claude Code"
+        code, _ = self.sys.capture([path, "mcp", "get", "jev-claude"])
+        return (
+            (True, "ferramentas decide, classify, rank, summarize_file, write")
+            if code == 0
+            else (
+                False,
+                "o Claude ainda não consegue delegar trabalho ao Jev e ao Ollama",
+            )
+        )
+
+    def _install_mcp(self) -> bool:
+        path = self._claude()
+        if not path:
+            return False
+        command = [
+            path,
+            "mcp",
+            "add",
+            "-s",
+            "user",
+            "jev-claude",
+            "--",
+            self.sys.python,
+            "-m",
+            "jev_claude",
+            "mcp",
+        ]
+        ok = self.sys.run(command) == 0
+        if ok:
+            self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
+        return ok
 
     # -- regra global ------------------------------------------------------------------
 

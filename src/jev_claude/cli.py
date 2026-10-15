@@ -1,4 +1,4 @@
-"""Linha de comando: `jev-claude setup | doctor | ask | write | models | spend | update | cache`."""
+"""Linha de comando: `jev-claude setup | mcp | doctor | ask | write | models | spend | update | cache`."""
 
 from __future__ import annotations
 
@@ -55,6 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     setup.add_argument("--model", help="modelo do Ollama para texto (padrão: llama3.2)")
     setup.set_defaults(standalone=_setup)
+
+    mcp = sub.add_parser("mcp", help="servidor MCP (stdio) para o Claude delegar decisões e textos")
+    mcp.set_defaults(standalone=_mcp)
 
     doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
@@ -181,6 +184,12 @@ def _spend(r: JevClaude, args: argparse.Namespace) -> int:
 def _setup(args: argparse.Namespace) -> int:
     mode: Mode = "yes" if args.yes else "check" if args.check else "interactive"
     return run_setup(mode, ollama_model=args.model, version=__version__)
+
+
+def _mcp(args: argparse.Namespace) -> int:
+    from jev_claude.mcp import serve
+
+    return serve()
 
 
 def _installed_editable() -> bool:

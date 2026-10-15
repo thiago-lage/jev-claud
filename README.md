@@ -96,6 +96,7 @@ falta, explica para que serve e **pergunta antes de instalar cada coisa**:
 | Chave do Jev | Opcional. Guarda a chave e o orçamento mensal em `config.json` (padrão US$ 0). |
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
+| Servidor MCP | Registra o `jev-claude` no Claude Code para delegar lotes e economizar tokens. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 
 ```bash
@@ -116,6 +117,35 @@ um ambiente virtual: o `typesafe-sdk` exige versões recentes de `anyio`/`h11`, 
 conflitar com pacotes antigos no Python global.
 
 Exemplo completo, que roda sem configurar nada: [`examples/triagem_suporte.py`](examples/triagem_suporte.py).
+
+## Dentro do Claude: servidor MCP para economizar tokens
+
+O `jev-claude setup` registra o jev-claude como servidor MCP do Claude Code (ou faça à mão):
+
+```bash
+claude mcp add -s user jev-claude -- python -m jev_claude mcp
+```
+
+Nas próximas sessões o Claude ganha estas ferramentas, que rodam **fora do contexto dele**:
+
+| Ferramenta | O Claude manda | Recebe de volta | Motor |
+| --- | --- | --- | --- |
+| `classify` | caminho de um arquivo + rótulos | contagens + itens incertos | Jev / offline |
+| `rank` | caminho + consulta | só os top_k | Jev / offline |
+| `summarize_file` | caminho + foco | um resumo | Ollama (grátis) |
+| `decide` | texto/JSON + perguntas | valores tipados + confiança | Jev / offline |
+| `write` | instrução curta | rascunho | Ollama (grátis) |
+| `status` | — | o que está ativo e o gasto do mês | — |
+
+**Onde a economia é real:** tudo que o Claude lê ou escreve custa tokens. Se você pede
+"classifique os 2.000 tickets de `tickets.csv`", ler o arquivo custaria dezenas de milhares de
+tokens. Com `classify`, o Claude envia ~100 tokens (o caminho e os rótulos) e recebe ~200 (as
+contagens). O mesmo vale para resumir arquivos grandes e escolher o que vale a pena ler.
+
+**Onde não compensa:** pergunta pequena e única. A chamada da ferramenta e as definições das
+ferramentas também custam tokens; o Claude responde direto. E o `llama3.2` (3B) é bem menos
+capaz que o Claude: use para rascunhos e resumos, e deixe o Claude revisar o que importa. A
+regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
 ## Configuração (tudo opcional)
 
@@ -207,6 +237,7 @@ r = JevClaude(writer=CallableWriter(lambda prompt, system: minha_llm(prompt, sys
 
 ```bash
 jev-claude setup                        # assistente: instala e configura tudo
+jev-claude mcp                          # servidor MCP (stdio) usado pelo Claude Code
 jev-claude doctor                       # backends ativos, modelo, orçamento, cache
 jev-claude ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 jev-claude ask "Preciso disso hoje" --noul "É urgente?"

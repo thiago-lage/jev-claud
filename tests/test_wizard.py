@@ -30,6 +30,7 @@ class FakeSystem(System):
         sdk: bool = True,
         in_venv: bool = True,
         tools: Sequence[str] = ("winget", "brew"),
+        mcp: bool = False,
     ) -> None:
         self.platform = platform
         self.home = tmp_path / "home"
@@ -44,6 +45,7 @@ class FakeSystem(System):
             "skill": skill,
             "sdk": sdk,
             "marketplace": False,
+            "mcp": mcp,
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -73,6 +75,8 @@ class FakeSystem(System):
             self.state["marketplace"] = True
         elif command[1:3] == ["plugin", "install"]:
             self.state["skill"] = True
+        elif command[1:3] == ["mcp", "add"]:
+            self.state["mcp"] = True
         elif "typesafe-sdk" in command:
             self.state["sdk"] = True
         return 0
@@ -84,6 +88,8 @@ class FakeSystem(System):
             return 0, "typesafe@typesafe-ai\n" if self.state["skill"] else "Nenhum plugin\n"
         if list(command[1:4]) == ["plugin", "marketplace", "list"]:
             return 0, "typesafe-ai\n" if self.state["marketplace"] else "anthropic\n"
+        if list(command[1:4]) == ["mcp", "get", "jev-claude"]:
+            return (0, "jev-claude: connected\n") if self.state["mcp"] else (1, "No MCP server named\n")
         return 1, ""
 
     def spawn(self, command: Sequence[str]) -> None:
@@ -117,7 +123,14 @@ def make_ui(
 
 def ready_system(tmp_path: Path) -> FakeSystem:
     system = FakeSystem(
-        tmp_path, ollama=True, server=True, models=["llama3.2:latest"], claude=True, skill=True, sdk=True
+        tmp_path,
+        ollama=True,
+        server=True,
+        models=["llama3.2:latest"],
+        claude=True,
+        skill=True,
+        sdk=True,
+        mcp=True,
     )
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
@@ -148,6 +161,7 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
     assert any("irm https://claude.ai/install.ps1 | iex" in c for c in commands)
     assert "/bin/claude plugin marketplace add typesafe-ai/skills" in commands
     assert "/bin/claude plugin install typesafe@typesafe-ai" in commands
+    assert "/bin/claude mcp add -s user jev-claude -- python -m jev_claude mcp" in commands
     assert system.spawned == [["/bin/ollama", "serve"]]
     assert report.results["jev_key"] is False  # exige digitar: fica para o modo interativo
     assert RULE_START in (system.home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
