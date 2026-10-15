@@ -158,11 +158,12 @@ O plugin junta tudo que poupa contexto **sem mudar a qualidade da entrega**: o C
 implementando direto (edita arquivos, roda testes); o jev-claud só tira o ruído do caminho.
 
 ```text
-/plugin marketplace add thiago-lage/jev-claud
-/plugin install jevin@jev-claud
+/plugin install jevin --marketplace thiago-lage/jev-claud
 ```
 
-(o `jev-claud setup` faz isso por você). O hook usa o comando `jev-claud`
+(Claude Code 2.1.275 ou mais novo; em versões anteriores, `/plugin marketplace add
+thiago-lage/jev-claud` e depois `/plugin install jevin@jev-claud`. O `jev-claud setup` faz isso
+por você.) O hook usa o comando `jev-claud`
 (`pip install jev-claud`); sem ele, o hook não faz nada e o resto do plugin funciona normalmente.
 O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava `jev-claude`: quem
 vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca marketplace, plugin e MCP
