@@ -7,7 +7,9 @@
 # 3. Coloca o comando `jev-claud` em ~\.local\bin e garante que essa pasta esta no PATH.
 # 4. Abre o assistente `jev-claud setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
 #
-# Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala), JEV_CLAUD_INSTALL_DIR,
+# Instala a versao lancada no PyPI. Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala;
+# versao em desenvolvimento: "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"),
+# JEV_CLAUD_INSTALL_DIR,
 # JEV_CLAUD_BIN_DIR, JEV_CLAUD_NO_MODIFY_PATH=1, JEV_CLAUD_SKIP_SETUP=1.
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +21,7 @@ function Get-Setting($name, $default) {
     return $value
 }
 
-$Spec = Get-Setting "JEV_CLAUD_SPEC" "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"
+$Spec = Get-Setting "JEV_CLAUD_SPEC" "jev-claud[jev]"
 $InstallDir = Get-Setting "JEV_CLAUD_INSTALL_DIR" (Join-Path $env:USERPROFILE ".local\share\jev-claud")
 $BinDir = Get-Setting "JEV_CLAUD_BIN_DIR" (Join-Path $env:USERPROFILE ".local\bin")
 

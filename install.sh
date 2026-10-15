@@ -8,11 +8,13 @@
 # 3. Coloca o comando `jev-claud` em ~/.local/bin e garante que essa pasta esta no PATH.
 # 4. Abre o assistente `jev-claud setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
 #
-# Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala), JEV_CLAUD_INSTALL_DIR,
+# Instala a versao lancada no PyPI. Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala;
+# versao em desenvolvimento: "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"),
+# JEV_CLAUD_INSTALL_DIR,
 # JEV_CLAUD_BIN_DIR, JEV_CLAUD_NO_MODIFY_PATH=1, JEV_CLAUD_SKIP_SETUP=1.
 set -euo pipefail
 
-SPEC="${JEV_CLAUD_SPEC:-jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud}"
+SPEC="${JEV_CLAUD_SPEC:-jev-claud[jev]}"
 INSTALL_DIR="${JEV_CLAUD_INSTALL_DIR:-$HOME/.local/share/jev-claud}"
 BIN_DIR="${JEV_CLAUD_BIN_DIR:-$HOME/.local/bin}"
 

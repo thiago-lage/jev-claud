@@ -115,7 +115,8 @@ pip install jev-claud           # só o núcleo: nenhuma dependência, modo offl
 jev-claud setup                 # opcional: Ollama, Claude Code, plugin e regra global
 ```
 
-Versão em desenvolvimento, direto do GitHub:
+O instalador de uma linha e o `jev-claud update` usam a versão lançada no PyPI. Versão em
+desenvolvimento, direto do GitHub: `jev-claud update --dev`, ou
 `pip install "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"`.
 
 Sem o extra `[jev]` o pacote não tem nenhuma dependência e roda só no modo offline. Prefira

@@ -39,7 +39,8 @@ from jev_claud.config import config_path, load_config, save_config
 from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
 REPO_URL = "https://github.com/thiago-lage/jev-claud"
-PACKAGE_SPEC = f"jev-claud[jev] @ git+{REPO_URL}"
+PACKAGE_SPEC = "jev-claud[jev]"  # versão lançada no PyPI
+DEV_PACKAGE_SPEC = f"jev-claud[jev] @ git+{REPO_URL}"  # `jev-claud update --dev`
 TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
 PLUGIN_REPO = "thiago-lage/jev-claud"
 PLUGIN_MARKETPLACE = "jev-claud"
