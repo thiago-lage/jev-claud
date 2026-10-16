@@ -1,7 +1,7 @@
 {
   "name": "jevin",
   "displayName": "Jevin",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Ensina o Claude Code a poupar contexto e custo sem mudar a entrega: uma skill diz quando usar decisões tipadas (TypeSafe Jev), texto (LLM) ou código puro, e um subagente explora o código em contexto separado e devolve só a conclusão.",
   "author": {
     "name": "Thiago Lage",

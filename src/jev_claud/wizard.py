@@ -37,6 +37,7 @@ from typing import Any, Literal, TextIO
 from jev_claud import mascot
 from jev_claud.compact import HOOK_MATCHER, hook_command
 from jev_claud.config import config_path, load_config, save_config
+from jev_claud.envvars import getenv
 from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
 REPO_URL = "https://github.com/thiago-lage/jev-claud"
@@ -118,10 +119,10 @@ class System:
     def exists(self, path: Path) -> bool:
         return path.exists()
 
-    def run(self, command: Sequence[str]) -> int:
+    def run(self, command: Sequence[str], cwd: Path | None = None) -> int:
         """Executa mostrando a saída no terminal do usuário."""
         try:
-            return subprocess.run(list(command), check=False).returncode
+            return subprocess.run(list(command), check=False, cwd=cwd).returncode
         except OSError as error:
             print(f"  não foi possível executar {command[0]}: {error}", file=sys.stderr)
             return 127
@@ -143,6 +144,35 @@ class System:
         else:
             kwargs["start_new_session"] = True
         subprocess.Popen(list(command), **kwargs)
+
+    def process_alive(self, pid: int) -> bool:
+        """O processo `pid` ainda está rodando? Na dúvida, responde que sim (nada é apagado)."""
+        if pid <= 0:
+            return False
+        if sys.platform == "win32":  # os.kill no Windows encerraria o processo: consulta pela API
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return bool(kernel32.GetLastError() == 5)  # acesso negado: existe, de outro usuário
+            try:
+                code = ctypes.c_ulong()
+                if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    return True
+                return code.value == 259  # STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            return True
+        return True
+
+    def remove_tree(self, path: Path) -> None:
+        shutil.rmtree(path, ignore_errors=True)
 
     def ollama_models(self) -> list[str] | None:
         try:
@@ -906,14 +936,143 @@ class Setup:
         ok = True
         if any(scope in ("user", "") for _, scope in entries):
             ok = self.sys.run([path, "plugin", "update", "-s", "user", PLUGIN_ID]) == 0
-        if any(scope == "project" for _, scope in entries):
-            self.ui.note(
-                "O Jevin também está instalado por projeto: em cada um deles, rode "
-                f"`claude plugin update -s project {PLUGIN_ID}`."
-            )
+        project_installs = sum(1 for _, scope in entries if scope == "project")
+        if project_installs:
+            projects = self._stale_plugin_projects(path)
+            for project in projects:
+                command = [path, "plugin", "update", "-s", "project", PLUGIN_ID]
+                if self.sys.run(command, cwd=project) != 0:
+                    ok = False
+            if len(projects) < project_installs:
+                self.ui.note(
+                    "O Jevin também está instalado em projetos que não achei: em cada um deles, rode "
+                    f"`claude plugin update -s project {PLUGIN_ID}`."
+                )
         if ok:
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
         return ok
+
+    def _stale_plugin_projects(self, path: str) -> list[Path]:
+        """Pastas dos projetos com o Jevin instalado numa versão anterior (`plugin list --json`)."""
+        code, output = self.sys.capture([path, "plugin", "list", "--json"])
+        try:
+            data = json.loads(output) if code == 0 else []
+        except ValueError:
+            return []
+        projects: list[Path] = []
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict) or item.get("id") != PLUGIN_ID or item.get("scope") != "project":
+                continue
+            folder = item.get("projectPath")
+            version = str(item.get("version") or "")
+            if isinstance(folder, str) and _older(version, self.version) and self.sys.exists(Path(folder)):
+                projects.append(Path(folder))
+        return projects
+
+    def _plugin_cache(self) -> Path:
+        return self.sys.home / ".claude" / "plugins" / "cache" / PLUGIN_MARKETPLACE / "jevin"
+
+    def _clean_old_plugins(self, path: str) -> tuple[list[str], list[str]]:
+        """Apaga as versões anteriores do Jevin que ficaram no cache do Claude Code.
+
+        Só apaga o que o próprio Claude Code já marcou como órfão (`.orphaned_at`), que é anterior
+        a esta versão, que nenhuma instalação usa e que nenhuma sessão aberta registrou em
+        `.in_use`. Devolve (apagadas, mantidas porque ainda há sessão aberta usando).
+        """
+        root = self._plugin_cache()
+        if not self.sys.exists(root):
+            return [], []
+        _, output = self.sys.capture([path, "plugin", "list"])
+        installed = {version for version, _ in _plugin_entries(output, PLUGIN_ID)}
+        removed: list[str] = []
+        kept: list[str] = []
+        for folder in sorted(root.iterdir()):
+            name = folder.name
+            if (
+                not folder.is_dir()
+                or name in installed
+                or not _older(name, self.version)
+                or not (folder / ".orphaned_at").exists()
+            ):
+                continue
+            if self._held_by_open_session(folder):
+                kept.append(name)
+                continue
+            self.sys.remove_tree(folder)
+            removed.append(name)
+        return removed, kept
+
+    def _held_by_open_session(self, folder: Path) -> bool:
+        marks = folder / ".in_use"
+        if not marks.is_dir():
+            return False
+        for mark in marks.iterdir():
+            if not mark.name.isdigit() or self.sys.process_alive(int(mark.name)):
+                return True  # formato desconhecido ou sessão aberta: não arrisca
+        return False
+
+    def _legacy_install_dir(self) -> Path:
+        """Venv do instalador até a 0.6, quando o projeto se chamava jev-claude."""
+        return self.sys.home / ".local" / "share" / "jev-claude"
+
+    def _legacy_data_dir(self) -> Path | None:
+        """Dados da 0.6 (`jev-claude`), se a pasta nova também existe; `None` com JEV_CLAUD_HOME."""
+        if getenv("JEV_CLAUD_HOME", env=self.sys.env).strip():
+            return None
+        if self.sys.platform == "win32" and self.sys.env.get("LOCALAPPDATA"):
+            base = Path(self.sys.env["LOCALAPPDATA"])
+        else:
+            xdg = self.sys.env.get("XDG_CACHE_HOME", "").strip()
+            base = Path(xdg) if xdg else self.sys.home / ".cache"
+        old, new = base / "jev-claude", base / "jev-claud"
+        return old if self.sys.exists(old) and self.sys.exists(new) else None
+
+    def _referenced_anywhere(self, folder: Path) -> bool:
+        """Alguma configuração (hook, MCP do Claude Code, Cursor, Codex) ainda aponta para `folder`?"""
+        if Path(self.sys.python).resolve().is_relative_to(folder.resolve()):
+            return True
+        needles = {str(folder), folder.as_posix(), str(folder).replace("\\", "\\\\")}
+        configs = (
+            self.claude_settings,
+            self.sys.home / ".claude.json",
+            self.sys.home / ".cursor" / "mcp.json",
+            self._codex_dir() / "config.toml",
+        )
+        for config in configs:
+            try:
+                text = config.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if any(needle in text for needle in needles):
+                return True
+        return False
+
+    def _clean_legacy_files(self) -> list[str]:
+        """Apaga o que a 0.6 (jev-claude) deixou e nada mais usa. Devolve o que foi apagado."""
+        removed: list[str] = []
+        install = self._legacy_install_dir()
+        if self.sys.exists(install) and not self._referenced_anywhere(install):
+            self.sys.remove_tree(install)
+            removed.append(str(install))
+        data = self._legacy_data_dir()
+        if data is not None and not self._referenced_anywhere(data):
+            old_key = _load_json_object(data / "config.json") or {}
+            new_key = _load_json_object(data.parent / "jev-claud" / "config.json") or {}
+            if old_key.get("typesafe_api_key") and not new_key.get("typesafe_api_key"):
+                self.ui.warn(f"Mantive {data}: ele tem uma chave do Jev que a pasta nova não tem.")
+            else:
+                self.sys.remove_tree(data)
+                removed.append(str(data))
+        return removed
+
+    def _report_cleanup(self, path: str) -> None:
+        removed, kept = self._clean_old_plugins(path)
+        if removed:
+            self.ui.status("ok", "Versões antigas do Jevin", "apagadas: " + ", ".join(removed))
+        if kept:
+            self.ui.note(
+                f"{', '.join(kept)}: ainda em uso por uma sessão aberta; sai no próximo `jev-claud update`."
+            )
 
     def _install_plugin(self) -> bool:
         path = self._claude()
@@ -935,6 +1094,8 @@ class Setup:
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
         elif not self._update_plugin(path, output):
             return False
+        else:
+            self._report_cleanup(path)
         for old in OLD_PLUGIN_IDS:
             if _listed(output, old):
                 self.sys.run([path, "plugin", "uninstall", old])
@@ -1037,6 +1198,9 @@ class Setup:
 
         Só atualiza o que existe (regra no CLAUDE.md e no AGENTS.md do Codex, plugin Jevin);
         não instala nada novo. Roda no processo da versão nova, para usar a regra nova.
+        No fim, limpa o que sobrou de versões anteriores: as versões do Jevin no cache que
+        nenhuma sessão aberta usa, o marketplace `jev-claude` e as pastas da 0.6 (venv e dados)
+        que nenhuma configuração usa mais.
         """
         failed = False
         for rule, title in (
@@ -1060,8 +1224,16 @@ class Setup:
                     self.ui.status(
                         "no", "Plugin Jevin", f"não atualizou: rode `claude plugin update {PLUGIN_ID}`"
                     )
+                if not failed:
+                    self._report_cleanup(path)
             elif code == 0 and _listed(output, PLUGIN_SYNCED_ID):
                 self.ui.status("ok", "Plugin Jevin", "vem do diretório do Claude, que atualiza sozinho")
+            _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
+            if _listed(marketplaces, OLD_MARKETPLACE):
+                self.sys.run([path, "plugin", "marketplace", "remove", OLD_MARKETPLACE])
+                self.ui.status("ok", "Marketplace antigo", f"{OLD_MARKETPLACE} removido")
+        for folder in self._clean_legacy_files():
+            self.ui.status("ok", "Arquivos da 0.6 (jev-claude)", f"apagado: {folder}")
         return 1 if failed else 0
 
     def _write_rule_to(self, path: Path) -> bool:

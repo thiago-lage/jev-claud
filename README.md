@@ -72,8 +72,11 @@ Pronto. Abra uma conversa nova e trabalhe normalmente. Para conferir se está tu
 `jev-claud setup --check`.
 
 **Para atualizar**, rode `jev-claud update`. Ele atualiza tudo de uma vez: o pacote, o SDK do
-Jev, o plugin Jevin (skill e subagente) e a regra global no `~/.claude/CLAUDE.md`. Depois,
-abra conversas novas: as que já estavam abertas continuam com a versão antiga.
+Jev, o plugin Jevin (skill e subagente, inclusive onde ele está instalado por projeto) e a regra
+global no `~/.claude/CLAUDE.md`. No fim, ele apaga o que versões anteriores deixaram: as
+versões antigas do plugin que nenhuma sessão aberta usa e as pastas da época em que o projeto
+se chamava jev-claude, quando nada mais aponta para elas. Depois, abra conversas novas: as que já estavam abertas continuam com a
+versão antiga, que sai no próximo `update`.
 
 ### Por que não preciso chamar nada?
 

@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.10.2] - 2026-10-16
+
+### Adicionado
+
+- **O `jev-claud update` apaga o que versões anteriores deixaram.** Além das versões antigas do
+  plugin (abaixo), apaga as sobras da 0.6, quando o projeto se chamava jev-claude: o venv em
+  `~/.local/share/jev-claude`, a pasta de dados `jev-claude` (quando a nova `jev-claud` já existe)
+  e o marketplace `jev-claude`. Nada é apagado se alguma configuração (hook, MCP do Claude Code,
+  Cursor ou Codex) ainda apontar para a pasta, se ela guardar uma chave do Jev que a nova não tem,
+  ou se você usa `JEV_CLAUD_HOME`.
+- **Limpeza automática das versões anteriores do Jevin.** O `jev-claud update` (pelo `refresh`) e
+  o `setup` apagam do cache do Claude Code as versões antigas do plugin. Só apagam o que o próprio
+  Claude Code já marcou como órfão (`.orphaned_at`) e que nenhuma sessão aberta usa (`.in_use`).
+  Uma versão ainda em uso fica e sai no próximo `update`.
+- **O Jevin instalado por projeto também é atualizado.** O `refresh` acha a pasta de cada projeto
+  pelo `claude plugin list --json` e roda o `claude plugin update -s project` dentro dela. Só pede
+  o comando manual para projetos cuja pasta não existe mais.
+
 ## [0.10.1] - 2026-10-16
 
 ### Corrigido

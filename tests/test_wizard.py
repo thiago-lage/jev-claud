@@ -72,9 +72,13 @@ class FakeSystem(System):
             "plugin_version": None,
             "plugin_scopes": ["user"],
             "marketplace_version": "0.10.0",
+            # Instalações por projeto (pastas), listadas só no `plugin list --json`.
+            "plugin_projects": [],
+            "project_version": None,
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
+        self.cwds: list[tuple[list[str], Path]] = []
         self.spawned: list[list[str]] = []
 
     def which(self, name: str) -> str | None:
@@ -82,9 +86,11 @@ class FakeSystem(System):
             return f"/bin/{name}" if self.state[name] else None
         return f"/usr/bin/{name}" if name in self.tools else None
 
-    def run(self, command: Sequence[str]) -> int:
+    def run(self, command: Sequence[str], cwd: Path | None = None) -> int:
         command = list(command)
         self.commands.append(command)
+        if cwd is not None:
+            self.cwds.append((command, cwd))
         joined = " ".join(command)
         if (
             "Ollama.Ollama" in joined
@@ -104,7 +110,10 @@ class FakeSystem(System):
         elif command[1:3] == ["plugin", "install"]:
             self.state["plugin" if command[3] == "jevin@jev-claud" else "skill"] = True
         elif command[1:3] == ["plugin", "update"]:
-            self.state["plugin_version"] = self.state["marketplace_version"]
+            if "project" in command:
+                self.state["project_version"] = self.state["marketplace_version"]
+            else:
+                self.state["plugin_version"] = self.state["marketplace_version"]
         elif command[1:3] == ["plugin", "uninstall"]:
             names = {
                 "jev-claude@jev-claude": "old_plugin",
@@ -123,6 +132,23 @@ class FakeSystem(System):
     def capture(self, command: Sequence[str]) -> tuple[int, str]:
         if command[-1] == "--version":
             return 0, "2.1.300 (Claude Code)\n"
+        if list(command[1:4]) == ["plugin", "list", "--json"]:
+            items: list[dict[str, Any]] = []
+            if self.state["plugin"] and self.state["plugin_version"]:
+                items.append(
+                    {"id": "jevin@jev-claud", "version": self.state["plugin_version"], "scope": "user"}
+                )
+                project_version = self.state["project_version"] or self.state["plugin_version"]
+                items += [
+                    {
+                        "id": "jevin@jev-claud",
+                        "version": project_version,
+                        "scope": "project",
+                        "projectPath": p,
+                    }
+                    for p in self.state["plugin_projects"]
+                ]
+            return 0, json.dumps(items)
         if list(command[1:3]) == ["plugin", "list"]:
             installed = [
                 name
@@ -167,6 +193,11 @@ class FakeSystem(System):
     def spawn(self, command: Sequence[str]) -> None:
         self.spawned.append(list(command))
         self.state["server"] = True
+
+    alive: frozenset[int] = frozenset()
+
+    def process_alive(self, pid: int) -> bool:
+        return pid in self.alive
 
     def ollama_models(self) -> list[str] | None:
         return list(self.state["models"]) if self.state["server"] else None
@@ -659,8 +690,30 @@ def test_stale_plugin_is_updated_by_setup(tmp_path: Path) -> None:
     commands = [" ".join(c) for c in system.commands]
     assert "/bin/claude plugin marketplace update jev-claud" in commands
     assert "/bin/claude plugin update -s user jevin@jev-claud" in commands
+    assert "projetos que não achei" in out.getvalue()  # sem `--json` com a pasta: avisa
     assert "claude plugin update -s project jevin@jev-claud" in out.getvalue()
     assert setup._check_plugin() == (True, "jevin@jev-claud")
+
+
+def test_project_installs_are_updated_in_their_own_folders(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    app, gone = tmp_path / "app", tmp_path / "apagado"
+    app.mkdir()
+    system.state.update(
+        plugin=True,
+        jev_marketplace=True,
+        plugin_version="0.10.0",
+        plugin_scopes=["user", "project", "project"],
+        plugin_projects=[str(app), str(gone)],
+        project_version="0.10.0",
+        marketplace_version="0.10.1",
+    )
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.1").refresh() == 0
+    project = ["/bin/claude", "plugin", "update", "-s", "project", "jevin@jev-claud"]
+    assert system.cwds == [(project, app)]  # a pasta que não existe mais fica de fora
+    assert system.state["project_version"] == "0.10.1"
+    assert "projetos que não achei" in out.getvalue()
 
 
 def test_refresh_updates_only_what_is_installed(tmp_path: Path) -> None:
@@ -679,6 +732,101 @@ def test_refresh_updates_only_what_is_installed(tmp_path: Path) -> None:
     ui, out = make_ui()
     assert Setup(system=system, ui=ui, version="0.10.0").refresh() == 0  # já atualizado: nada a fazer
     assert system.commands == [] and "já está na versão atual" in out.getvalue()
+
+
+def _cached_version(system: FakeSystem, version: str, *, orphaned: bool, users: Sequence[int] = ()) -> Path:
+    folder = system.home / ".claude" / "plugins" / "cache" / "jev-claud" / "jevin" / version
+    (folder / "skills").mkdir(parents=True)
+    if orphaned:
+        (folder / ".orphaned_at").write_text("1792094756214", encoding="utf-8")
+    for pid in users:
+        (folder / ".in_use").mkdir(exist_ok=True)
+        (folder / ".in_use" / str(pid)).write_text(f'{{"pid":{pid}}}', encoding="utf-8")
+    return folder
+
+
+def test_refresh_cleans_previous_versions_nobody_uses(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    system.state.update(plugin=True, jev_marketplace=True, plugin_version="0.10.1")
+    system.alive = frozenset({222})
+    closed = _cached_version(system, "0.7.0", orphaned=True, users=[111])  # sessão já fechada
+    open_session = _cached_version(system, "0.9.0", orphaned=True, users=[111, 222])
+    not_orphaned = _cached_version(system, "0.9.1", orphaned=False)  # o Claude Code ainda não liberou
+    current = _cached_version(system, "0.10.1", orphaned=True)  # instalada: nunca sai
+    newer = _cached_version(system, "0.11.0", orphaned=True)  # mais nova que esta: não mexe
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.1").refresh() == 0
+    assert not closed.exists()
+    assert open_session.exists() and not_orphaned.exists() and current.exists() and newer.exists()
+    text = out.getvalue()
+    assert "apagadas: 0.7.0" in text and "0.9.0: ainda em uso por uma sessão aberta" in text
+
+
+def test_real_process_check_never_kills_anything() -> None:
+    import os
+
+    system = System()
+    assert system.process_alive(os.getpid()) is True  # o próprio teste continua vivo
+    assert system.process_alive(0) is False and system.process_alive(-1) is False
+
+
+def test_setup_cleans_after_updating_the_plugin(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(
+        plugin=True, jev_marketplace=True, plugin_version="0.9.1", marketplace_version="0.10.1"
+    )
+    old = _cached_version(system, "0.9.1", orphaned=True)
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui, version="0.10.1").run("yes")
+    assert system.state["plugin_version"] == "0.10.1" and not old.exists()
+
+
+def _legacy_layout(tmp_path: Path) -> tuple[FakeSystem, Path, Path]:
+    """Windows com as pastas da 0.6 (jev-claude) ao lado das novas (jev-claud)."""
+    system = FakeSystem(tmp_path, claude=True)
+    install = system.home / ".local" / "share" / "jev-claude"
+    (install / "venv" / "Scripts").mkdir(parents=True)
+    (install / "instalar-ollama.log").write_text("log", encoding="utf-8")
+    local = Path(system.env["LOCALAPPDATA"])
+    data = local / "jev-claude"
+    data.mkdir(parents=True)
+    (data / "config.json").write_text('{"setup_version": "0.6.0"}', encoding="utf-8")
+    (data / "jev_claude.sqlite3").write_bytes(b"")
+    (local / "jev-claud").mkdir()
+    (local / "jev-claud" / "config.json").write_text('{"setup_version": "0.10.1"}', encoding="utf-8")
+    return system, install, data
+
+
+def test_refresh_deletes_what_version_0_6_left_behind(tmp_path: Path) -> None:
+    system, install, data = _legacy_layout(tmp_path)
+    system.state["old_marketplace"] = True
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.1").refresh() == 0
+    assert not install.exists() and not data.exists()
+    assert (data.parent / "jev-claud" / "config.json").exists()  # a pasta nova fica
+    assert "/bin/claude plugin marketplace remove jev-claude" in [" ".join(c) for c in system.commands]
+    assert out.getvalue().count("Arquivos da 0.6 (jev-claude)") == 2
+
+
+def test_refresh_keeps_legacy_folders_still_in_use(tmp_path: Path) -> None:
+    system, install, data = _legacy_layout(tmp_path)
+    settings = system.home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    hook = {"type": "command", "command": f"{install.as_posix()}/venv/Scripts/python.exe -m jev_claude hook"}
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [{"hooks": [hook]}]}}), encoding="utf-8")
+    (data / "config.json").write_text('{"typesafe_api_key": "ts-antiga"}', encoding="utf-8")
+    ui, out = make_ui()
+    Setup(system=system, ui=ui, version="0.10.1").refresh()
+    assert install.exists()  # o hook ainda usa esse venv
+    assert data.exists() and "tem uma chave do Jev que a pasta nova não tem" in out.getvalue()
+
+
+def test_refresh_never_touches_a_custom_home(tmp_path: Path) -> None:
+    system, _, data = _legacy_layout(tmp_path)
+    system.env = {**system.env, "JEV_CLAUD_HOME": str(tmp_path / "meu-home")}
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui, version="0.10.1").refresh()
+    assert data.exists()
 
 
 def test_refresh_installs_nothing_new(tmp_path: Path) -> None:
