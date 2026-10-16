@@ -138,6 +138,8 @@ def _doctor(r: JevClaud, args: argparse.Namespace) -> int:
     jev, budget = status["jev"], status["budget"]
     writer = r.writer
     print(f"jev-claud {__version__}")
+    if status["offline"]:
+        print("Modo offline: ligado (JEV_CLAUD_OFFLINE=1; nada sai da máquina, custo zero)")
     print("\nDecisões (o código ramifica):")
     print(f"  typesafe-sdk : {jev['sdk_version'] or 'não instalado  ->  pip install jev-claud[jev]'}")
     print(f"  TYPESAFE_API_KEY : {'definida' if jev['api_key'] else 'ausente'}")
@@ -154,6 +156,9 @@ def _doctor(r: JevClaud, args: argparse.Namespace) -> int:
     )
     print("\nTexto (uma pessoa lê):")
     print(f"  LLM          : {_describe_writer(writer)}")
+    if writer is not None:
+        rapido, padrao, forte = r.tier_models().values()
+        print(f"  esforço      : rápido {rapido} | padrão {padrao} | forte {forte}")
     if r.jev is not None:
         print(f"  estratégia   : {r.strategy}  (offline aceito com confiança >= {r.cascade_accept:.2f})")
     print(f"\nCache: {status['cache']['entries']} decisões em {status['cache']['path']}")

@@ -12,6 +12,7 @@ O óbvio sai de graça; o difícil continua com o Jev.
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import inspect
 import json
@@ -38,11 +39,12 @@ from jev_claud.decision import (
     noul_confidence,
     score_confidence,
 )
-from jev_claud.errors import BackendError, BudgetExceeded, NoWriterError
+from jev_claud.effort import TIERS, EffortPlan, Tier, effort_plan, pack, split_text
+from jev_claud.errors import BackendError, BudgetExceeded, NoWriterError, WriterError
 from jev_claud.models import ALIASES, resolve_model
 from jev_claud.questions import Choice, Content, Noul, Question, Score, noul, to_wire
 from jev_claud.store import Store
-from jev_claud.writers import Writer, auto_writer
+from jev_claud.writers import OpenAICompatibleWriter, Writer, auto_writer, is_local_url
 
 logger = logging.getLogger("jev_claud")
 
@@ -54,6 +56,9 @@ RELEVANCE_LEVELS: tuple[str, ...] = (
     "Relevante: responde parte de `query`.",
     "Muito relevante: responde `query` diretamente.",
 )
+
+SUMMARY_SYSTEM = "Você resume documentos com fidelidade, sem inventar nada. Responda em português."
+DEFAULT_FOCUS = "Resuma os pontos principais em tópicos curtos."
 
 
 class _Missing:
@@ -101,6 +106,9 @@ class JevClaud:
             `"jev"` (toda pergunta vai ao Jev). Padrão: `JEV_CLAUD_STRATEGY`.
         cascade_accept: confiança mínima para aceitar a resposta offline na cascata
             (padrão: `JEV_CLAUD_CASCADE_ACCEPT`, 0,8). Suba para escalar mais ao Jev.
+
+    Com `JEV_CLAUD_OFFLINE=1` (`Settings.offline`), nada sai da máquina: o Jev nunca é usado
+    e o texto só vai a uma LLM local (esta máquina ou a rede local).
     """
 
     def __init__(
@@ -126,6 +134,10 @@ class JevClaud:
         self.cascade_accept = self.settings.cascade_accept if cascade_accept is None else cascade_accept
         if not 0.0 <= self.cascade_accept <= 1.0:
             raise ValueError("cascade_accept deve estar entre 0 e 1.")
+        if self.settings.offline:
+            if jev not in (None, "auto"):
+                logger.warning("JEV_CLAUD_OFFLINE=1: o backend do Jev passado será ignorado.")
+            jev = None
         if jev == "auto":
             key = self.settings.typesafe_api_key
             has_key = JevBackend.key_configured(key)
@@ -134,6 +146,8 @@ class JevClaud:
                 logger.warning("Chave do Jev configurada, mas o SDK falta: pip install 'jev-claud[jev]'.")
         self.jev: JevBackend | None = jev
         self._writer: Writer | Literal["auto"] | None = writer
+        self._tier_writers: dict[Tier, Writer] = {}
+        self._broken_tiers: set[Tier] = set()
         self.model_spec = model or self.settings.model
         self.policy = policy or Policy()
         self.budget = budget or Budget(self.settings.budget_usd, self.settings.usd_per_mtok)
@@ -340,8 +354,35 @@ class JevClaud:
     @property
     def writer(self) -> Writer | None:
         if self._writer == "auto":
-            self._writer = auto_writer(self.settings.ollama_model)
+            self._writer = auto_writer(self.settings.ollama_model, local_only=self.settings.offline)
         return self._writer
+
+    def tier_models(self) -> dict[str, str | None]:
+        """Modelo usado em cada camada (`rapido`, `padrao`, `forte`)."""
+        models: dict[str, str | None] = {}
+        for tier in TIERS:
+            writer = self.writer_for(tier)
+            models[tier] = getattr(writer, "model", None) or (writer.name if writer else None)
+        return models
+
+    def writer_for(self, tier: Tier | None) -> Writer | None:
+        """A LLM da camada pedida: o mesmo endpoint, trocando só o modelo.
+
+        Camada sem modelo configurado, que já falhou nesta sessão, ou LLM que não é um endpoint
+        compatível com OpenAI (ex.: `CallableWriter`) usa a LLM padrão.
+        """
+        base = self.writer
+        if base is None or tier in (None, "padrao") or tier in self._broken_tiers:
+            return base
+        model = self.settings.ollama_model_fast if tier == "rapido" else self.settings.ollama_model_strong
+        if not model or not isinstance(base, OpenAICompatibleWriter) or model == base.model:
+            return base
+        writer = self._tier_writers.get(tier)
+        if writer is None:
+            clone = copy.copy(base)
+            clone.model = model
+            writer = self._tier_writers[tier] = clone
+        return writer
 
     def write(
         self,
@@ -351,21 +392,117 @@ class JevClaud:
         system: str | None = None,
         max_tokens: int = 800,
         temperature: float = 0.3,
+        tier: Tier | None = None,
     ) -> str:
-        """Gera texto livre para uma pessoa ler. Nunca use isto para decidir um `if`."""
-        writer = self.writer
-        if writer is None:
+        """Gera texto livre para uma pessoa ler. Nunca use isto para decidir um `if`.
+
+        `tier` escolhe o modelo local (`rapido`, `padrao`, `forte`); se o modelo da camada
+        falhar (ex.: não foi baixado), a chamada é refeita com o modelo padrão.
+        """
+        base = self.writer
+        if base is None:
             raise NoWriterError(
                 "Nenhuma LLM de texto configurada. Opções gratuitas: rode o Ollama localmente "
                 "(https://ollama.com) ou defina JEV_CLAUD_LLM_BASE_URL e JEV_CLAUD_LLM_MODEL para um "
                 "endpoint compatível com OpenAI."
             )
+        url = getattr(base, "base_url", None)
+        if self.settings.offline and isinstance(url, str) and not is_local_url(url):
+            raise WriterError(f"JEV_CLAUD_OFFLINE=1 só aceita LLM local; esta aponta para {url}.")
         if context is not None:
             rendered = (
                 context if isinstance(context, str) else json.dumps(context, ensure_ascii=False, indent=2)
             )
             prompt = f"{prompt}\n\nContexto:\n{rendered}"
-        return writer.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
+        writer = self.writer_for(tier) or base
+        try:
+            return writer.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
+        except WriterError as error:
+            if writer is base or tier is None:
+                raise
+            logger.warning(
+                "Modelo %s falhou (%s); usando %s.",
+                getattr(writer, "model", tier),
+                error,
+                getattr(base, "model", base.name),
+            )
+            self._broken_tiers.add(tier)
+            return base.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
+
+    def summarize(self, text: str, *, focus: str | None = None, effort: str | None = None) -> str:
+        """Resume um texto grande com a LLM local, quebrado em blocos conforme o `effort`.
+
+        `baixo`: blocos grandes, tudo no modelo rápido. `medio` (padrão): blocos no rápido,
+        junção no padrão. `alto`: blocos menores com mais sobreposição, junção no forte.
+        A junção é hierárquica (nunca manda à LLM mais que um bloco por vez) e uma parte que
+        falha não derruba o resumo: ela fica de fora e o resumo avisa.
+        """
+        plan = effort_plan(effort)
+        focus = focus or DEFAULT_FOCUS
+        chunks = split_text(text, plan.chunk_chars, plan.overlap_chars)
+        if not chunks:
+            raise ValueError("Nada para resumir: o texto está vazio.")
+        if len(chunks) == 1:
+            return self.write(
+                focus,
+                context=chunks[0],
+                system=SUMMARY_SYSTEM,
+                max_tokens=plan.final_tokens,
+                tier=plan.final_tier,
+            )
+        partials: list[str] = []
+        failed = 0
+        last_error: WriterError | None = None
+        for n, chunk in enumerate(chunks, 1):
+            try:
+                partials.append(
+                    self.write(
+                        f"Parte {n} de {len(chunks)} de um documento. Extraia o que importa para: {focus}",
+                        context=chunk,
+                        system=SUMMARY_SYSTEM,
+                        max_tokens=plan.part_tokens,
+                        tier=plan.part_tier,
+                    )
+                )
+            except WriterError as error:
+                failed += 1
+                last_error = error
+                logger.warning("Parte %d de %d falhou na LLM local: %s", n, len(chunks), error)
+        if not partials:
+            assert last_error is not None
+            raise last_error
+        while len(partials) > 1 and sum(len(p) for p in partials) > plan.chunk_chars:
+            groups = pack(partials, plan.chunk_chars)
+            if len(groups) == len(partials):
+                break  # cada parcial já ocupa um bloco: juntar de novo não encolhe nada
+            partials = [self._merge(group, focus, plan, final=False) for group in groups]
+        summary = self._merge(partials, focus, plan, final=True)
+        if failed:
+            summary += (
+                f"\n\n(Aviso: {failed} de {len(chunks)} partes falharam na LLM local "
+                "e ficaram fora deste resumo.)"
+            )
+        return summary
+
+    def _merge(self, parts: list[str], focus: str, plan: EffortPlan, *, final: bool) -> str:
+        joined = "\n\n".join(f"[Parte {n}]\n{part}" for n, part in enumerate(parts, 1))
+        if final:
+            prompt = f"Junte estes resumos parciais em um resumo final. {focus}"
+            return self.write(
+                prompt,
+                context=joined,
+                system=SUMMARY_SYSTEM,
+                max_tokens=plan.final_tokens,
+                tier=plan.final_tier,
+            )
+        prompt = f"Junte estes resumos parciais em um só, sem perder fatos. Foco: {focus}"
+        return self.write(
+            prompt,
+            context=joined,
+            system=SUMMARY_SYSTEM,
+            max_tokens=plan.part_tokens * 2,
+            tier=plan.part_tier,
+        )
 
     # ------------------------------------------------------------------
     # Async (mesma semântica, sem bloquear o event loop)
@@ -392,6 +529,7 @@ class JevClaud:
         spent_usd, spent_tokens, calls = self.store.spent()
         writer = self._writer if self._writer != "auto" else None
         return {
+            "offline": self.settings.offline,
             "jev": {
                 "sdk_installed": JevBackend.sdk_available(),
                 "sdk_version": JevBackend.sdk_version(),

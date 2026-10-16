@@ -10,7 +10,10 @@ from typing import Any
 import pytest
 
 from jev_claud import CallableWriter, JevClaud
-from jev_claud.mcp import CHUNK_CHARS, MAX_ITEMS, TOOLS, Server, serve
+from jev_claud.effort import PLANS
+from jev_claud.mcp import MAX_ITEMS, TOOLS, Server, serve
+
+CHUNK_CHARS = PLANS["medio"].chunk_chars
 
 
 class Recorder:
@@ -223,9 +226,39 @@ def test_summarize_large_file_map_reduce(server: Server, llm: Recorder, tmp_path
     assert "Junte estes resumos parciais" in llm.calls[-1][0] and "Só decisões." in llm.calls[-1][0]
 
 
+def test_summarize_effort_changes_how_much_work_is_done(llm: Recorder, tmp_path: Path) -> None:
+    file = tmp_path / "grande.txt"
+    file.write_text("Uma frase com fatos. " * 1500, encoding="utf-8")  # ~31 mil caracteres
+    calls = {}
+    for effort in ("baixo", "medio", "alto"):
+        recorder = Recorder()
+        srv = Server(lambda r=recorder: JevClaud(store=":memory:", writer=CallableWriter(r)))
+        payload(call(srv, "summarize_file", {"path": str(file), "effort": effort}))
+        calls[effort] = len(recorder.calls)
+        srv.close()
+    assert calls["baixo"] < calls["medio"] < calls["alto"]
+
+
+def test_summarize_rejects_bad_effort_and_empty_file(server: Server, tmp_path: Path) -> None:
+    file = tmp_path / "vazio.txt"
+    file.write_text("  \n", encoding="utf-8")
+    assert call(server, "summarize_file", {"path": str(file)})["isError"] is True
+    file.write_text("texto", encoding="utf-8")
+    result = call(server, "summarize_file", {"path": str(file), "effort": "máximo"})
+    assert result["isError"] is True and "baixo, medio ou alto" in result["content"][0]["text"]
+
+
+def test_effort_is_in_tool_schemas() -> None:
+    schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in TOOLS}
+    assert schemas["summarize_file"]["effort"]["enum"] == ["baixo", "medio", "alto"]
+    assert "effort" in schemas["write"]
+
+
 def test_status_reports_backends(server: Server) -> None:
     result = payload(call(server, "status", {}))
     assert result["jev"]["enabled"] is False and result["writer"] == "callable"
+    assert result["offline"] is False
+    assert result["effort_models"] == {"rapido": "callable", "padrao": "callable", "forte": "callable"}
 
 
 # -- loop stdio ------------------------------------------------------------------------------

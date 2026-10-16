@@ -38,7 +38,15 @@ você vai editar:
   O resumo vem de um modelo local pequeno: confira o trecho original antes de afirmar
   algo crítico com base nele.
 - `decide`: uma decisão tipada pontual.
-- `status`: o que está ativo (Jev, Ollama, cache).
+- `status`: o que está ativo (modo offline, Jev, Ollama, modelos de cada esforço, cache).
+
+`summarize_file` e `write` aceitam `effort` (`baixo`, `medio`, `alto`), sempre grátis e local:
+
+| Esforço | Quando | O que a LLM local faz |
+| --- | --- | --- |
+| `baixo` | triagem: "vale a pena ler isto?" | blocos grandes, tudo no modelo rápido |
+| `medio` (padrão) | resumo de uso geral | blocos no modelo rápido, junção no padrão |
+| `alto` | a fidelidade importa (relatório, decisão) | blocos menores com sobreposição, junção no modelo forte |
 
 Não use para: código-fonte que você vai alterar (leia-o você mesmo), perguntas pequenas
 e únicas (responder direto custa menos) ou gerar código (nunca).
@@ -57,4 +65,6 @@ indica onde está a saída inteira. O código de saída é o do comando original
 ## 4. Explorar sem encher o contexto
 
 Para perguntas amplas sobre o código ("onde X é tratado?", "como Y funciona?") que exigiriam
-ler muitos arquivos, delegue ao subagente `jevin:scout`: só a conclusão volta.
+ler muitos arquivos, delegue ao subagente `jevin:scout`: só a conclusão volta. Ele roda no
+Haiku com esforço baixo, então a busca gasta bem menos do limite do plano que a conversa
+principal. O modelo e o esforço da conversa principal são escolha da pessoa, no seletor do app.

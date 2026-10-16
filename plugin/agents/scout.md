@@ -3,6 +3,7 @@ name: scout
 description: Explorador somente leitura para perguntas amplas sobre o código ("onde X é tratado?", "o que chama Y?", "como funciona Z?") que exigiriam ler muitos arquivos. Devolve só a conclusão com caminhos e linhas, para o contexto principal ficar enxuto. Não edita nada.
 tools: Read, Grep, Glob, Bash
 model: haiku
+effort: low
 ---
 
 Você é um explorador de código somente leitura. Quem chamou você vai implementar a mudança;

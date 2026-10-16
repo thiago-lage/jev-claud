@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+
+- **Esforço na camada local (`baixo`, `medio`, `alto`).** `summarize_file` e `write` (MCP) e
+  `JevClaud.summarize`/`JevClaud.write(tier=...)` (biblioteca) quebram o trabalho entre modelos
+  do Ollama: blocos no modelo rápido (`JEV_CLAUD_OLLAMA_MODEL_FAST`), junção no padrão ou no forte
+  (`JEV_CLAUD_OLLAMA_MODEL_STRONG`). Sem esses modelos, tudo usa o padrão.
+- **Modo offline estrito (`JEV_CLAUD_OFFLINE=1`).** O Jev nunca é chamado, mesmo com orçamento,
+  e o texto só vai a uma LLM nesta máquina ou na rede local. `status` e `jev-claud doctor` mostram
+  o modo e o modelo de cada esforço.
+- Subagente `scout` com esforço baixo (`effort: low`), além do Haiku.
+
+### Alterado
+
+- **Resumo em blocos mais robusto.** Os cortes caem em parágrafo, linha ou frase, com
+  sobreposição entre blocos. A junção é hierárquica (o modelo pequeno nunca recebe mais que um
+  bloco), uma parte que falha fica de fora com aviso em vez de derrubar o resumo, e um modelo de
+  camada que falha cai no padrão uma vez.
+
 ## [0.9.1] - 2026-10-15
 
 ### Corrigido

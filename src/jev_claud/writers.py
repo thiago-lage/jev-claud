@@ -10,15 +10,20 @@ Só a biblioteca padrão é usada: nenhuma dependência extra.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import logging
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 from jev_claud.envvars import getenv
 from jev_claud.errors import WriterError
+
+logger = logging.getLogger("jev_claud")
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
@@ -121,19 +126,39 @@ class CallableWriter:
         return self._fn(prompt, system)
 
 
-def auto_writer(ollama_model: str | None = None) -> Writer | None:
+def is_local_url(url: str) -> bool:
+    """`True` se `url` aponta para esta máquina ou para a rede local (nada vai à internet)."""
+    host = (urllib.parse.urlsplit(url if "//" in url else f"http://{url}").hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local or address.is_unspecified
+
+
+def auto_writer(ollama_model: str | None = None, *, local_only: bool = False) -> Writer | None:
     """Detecta uma LLM de texto sem custo extra de configuração.
 
     1. `JEV_CLAUD_LLM_BASE_URL` + `JEV_CLAUD_LLM_MODEL` (+ `JEV_CLAUD_LLM_API_KEY` opcional)
     2. Ollama rodando localmente (modelo: `ollama_model`, `JEV_CLAUD_OLLAMA_MODEL` ou `llama3.2`)
     3. nenhuma (o `write()` explica como configurar)
+
+    Com `local_only` (modo offline), endpoints fora da máquina ou da rede local são ignorados.
     """
     base_url = getenv("JEV_CLAUD_LLM_BASE_URL").strip()
+    if base_url and local_only and not is_local_url(base_url):
+        logger.warning("Modo offline: ignorando JEV_CLAUD_LLM_BASE_URL remoto (%s).", base_url)
+        base_url = ""
     if base_url:
         model = getenv("JEV_CLAUD_LLM_MODEL").strip()
         if not model:
             raise WriterError("Defina JEV_CLAUD_LLM_MODEL junto com JEV_CLAUD_LLM_BASE_URL.")
         return OpenAICompatibleWriter(base_url, model, api_key=getenv("JEV_CLAUD_LLM_API_KEY") or None)
+    if local_only and not is_local_url(ollama_host()):
+        logger.warning("Modo offline: ignorando OLLAMA_HOST remoto (%s).", ollama_host())
+        return None
     if OllamaWriter.available():
         return OllamaWriter(ollama_model)
     return None

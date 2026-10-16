@@ -28,6 +28,9 @@ CONFIG_KEYS = frozenset(
         "cache_ttl_days",
         "typesafe_api_key",
         "ollama_model",
+        "ollama_model_fast",
+        "ollama_model_strong",
+        "offline",
         "setup_version",
         "strategy",
         "cascade_accept",
@@ -88,6 +91,23 @@ def _text(name: str, file_value: Any) -> str | None:
     return value or None
 
 
+_TRUE = frozenset({"1", "true", "sim", "yes", "on"})
+_FALSE = frozenset({"0", "false", "nao", "não", "no", "off"})
+
+
+def _bool(name: str, file_value: Any, default: bool) -> bool:
+    raw = getenv(name).strip().lower()
+    if not raw:
+        if file_value is None:
+            return default
+        raw = str(file_value).strip().lower()
+    if raw in _TRUE:
+        return True
+    if raw in _FALSE:
+        return False
+    raise ValueError(f"{name} deve ser 1 ou 0 (sim/não), recebido {raw!r}.")
+
+
 @dataclass(frozen=True)
 class Settings:
     budget_usd: float = 0.0
@@ -102,6 +122,12 @@ class Settings:
     """`TYPESAFE_API_KEY`: chave do Jev."""
     ollama_model: str | None = None
     """`JEV_CLAUD_OLLAMA_MODEL`: modelo do Ollama para texto (padrão `llama3.2`)."""
+    ollama_model_fast: str | None = None
+    """`JEV_CLAUD_OLLAMA_MODEL_FAST`: modelo rápido para os blocos (ex.: `llama3.2:1b`)."""
+    ollama_model_strong: str | None = None
+    """`JEV_CLAUD_OLLAMA_MODEL_STRONG`: modelo forte para o esforço alto (ex.: `qwen2.5:7b`)."""
+    offline: bool = False
+    """`JEV_CLAUD_OFFLINE`: 1 garante tudo local e grátis (nunca o Jev, só LLM local)."""
     strategy: str = "cascade"
     """`JEV_CLAUD_STRATEGY`: `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev)."""
     cascade_accept: float = 0.8
@@ -125,6 +151,9 @@ class Settings:
             cache_ttl_days=_float("JEV_CLAUD_CACHE_TTL_DAYS", file.get("cache_ttl_days"), 7.0),
             typesafe_api_key=_text("TYPESAFE_API_KEY", file.get("typesafe_api_key")),
             ollama_model=_text("JEV_CLAUD_OLLAMA_MODEL", file.get("ollama_model")),
+            ollama_model_fast=_text("JEV_CLAUD_OLLAMA_MODEL_FAST", file.get("ollama_model_fast")),
+            ollama_model_strong=_text("JEV_CLAUD_OLLAMA_MODEL_STRONG", file.get("ollama_model_strong")),
+            offline=_bool("JEV_CLAUD_OFFLINE", file.get("offline"), False),
             strategy=(_text("JEV_CLAUD_STRATEGY", file.get("strategy")) or "cascade").lower(),
             cascade_accept=_float("JEV_CLAUD_CASCADE_ACCEPT", file.get("cascade_accept"), 0.8),
         )

@@ -104,6 +104,41 @@ repositório (o Claude Code instala os plugins declarados ali):
 }
 ```
 
+### Esforço por modelo, offline e grátis
+
+O seletor do app escolhe o modelo e o esforço **do Claude**. O jev-claud faz o mesmo na camada
+local, que é grátis: o texto grande é quebrado em blocos, os blocos vão a um modelo rápido do
+Ollama e a junção a um modelo mais capaz. O Claude escolhe o esforço em cada chamada de
+`summarize_file` e `write`:
+
+| Esforço | Blocos | Modelo dos blocos | Modelo da junção |
+| --- | --- | --- | --- |
+| `baixo` | grandes, sem sobreposição | rápido | rápido |
+| `medio` (padrão) | médios, pouca sobreposição | rápido | padrão |
+| `alto` | menores, mais sobreposição | padrão | forte |
+
+```bash
+ollama pull llama3.2:1b && ollama pull llama3.2 && ollama pull qwen2.5:7b
+```
+
+```powershell
+$env:JEV_CLAUD_OLLAMA_MODEL_FAST = "llama3.2:1b"    # rápido
+$env:JEV_CLAUD_OLLAMA_MODEL = "llama3.2"            # padrão
+$env:JEV_CLAUD_OLLAMA_MODEL_STRONG = "qwen2.5:7b"   # forte
+$env:JEV_CLAUD_OFFLINE = "1"                        # garante: nada sai da máquina
+```
+
+- Sem os modelos rápido e forte, tudo usa o padrão: nada quebra sem configuração extra.
+- Modelo que falha (ex.: não foi baixado) cai no padrão, uma vez, e fica de fora até o fim da sessão.
+- A junção é hierárquica: o modelo pequeno nunca recebe mais que um bloco de cada vez.
+- Uma parte que falha não derruba o resumo: ela fica de fora e o resumo avisa.
+- `JEV_CLAUD_OFFLINE=1` desliga o Jev de vez (mesmo com orçamento) e só aceita LLM nesta máquina
+  ou na rede local. `jev-claud doctor` mostra o modo e o modelo de cada esforço.
+
+As respostas do próprio Claude continuam gastando o limite do seu plano: elas não rodam
+offline. O que o jev-claud faz é mandar para o Claude menos coisa para ler. O subagente
+`scout` do plugin roda no Haiku com esforço baixo, então explorar o código também gasta menos.
+
 ## Para desenvolvedores: decisões tipadas no seu código
 
 **Decisões tipadas para o código. Texto livre para pessoas. Custo zero por padrão.**

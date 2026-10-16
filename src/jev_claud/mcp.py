@@ -25,13 +25,13 @@ from typing import Any, BinaryIO
 from jev_claud import __version__, savings
 from jev_claud.core import JevClaud
 from jev_claud.decision import Band, Region
+from jev_claud.effort import EFFORTS, WRITE_TIER, normalize_effort
 from jev_claud.errors import JevClaudError
 from jev_claud.media import Image
 from jev_claud.questions import Question, box, choice, noul, score
 
 MAX_ITEMS = 500
 MAX_FILE_CHARS = 400_000
-CHUNK_CHARS = 6_000
 FALLBACK_PROTOCOL = "2025-06-18"
 
 INSTRUCTIONS = """\
@@ -41,8 +41,20 @@ Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do C
 - Decisão tipada que o código vai ramificar: `decide` (TypeSafe Jev; offline grátis sem orçamento).
 - Texto em prosa longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local).
   Revise antes de mostrar ao usuário: a LLM local é bem menos capaz que o Claude.
+- `effort` (baixo, medio, alto) em `summarize_file` e `write` escolhe quanto trabalho e qual
+  modelo local usar: baixo para triagem rápida, alto quando a fidelidade importa. Tudo grátis.
 Nunca use estas ferramentas para escrever, gerar ou editar código: implemente você mesmo,
 editando os arquivos. Para uma pergunta pequena e única, responda direto."""
+
+_EFFORT = {
+    "type": "string",
+    "enum": list(EFFORTS),
+    "default": "medio",
+    "description": (
+        "Quanto trabalho a LLM local faz: baixo (blocos grandes, modelo rápido), medio (padrão) ou "
+        "alto (blocos menores com sobreposição, modelo forte na junção). Sempre grátis e local."
+    ),
+}
 
 _QUESTION_SCHEMA = {
     "type": "object",
@@ -142,7 +154,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "summarize_file",
         "description": (
-            "Resume um arquivo de texto grande com a LLM local (Ollama, grátis), em partes, e devolve só o "
+            "Resume um arquivo de texto grande com a LLM local (Ollama, grátis), em blocos, e devolve só o "
             "resumo. Use antes de decidir se precisa ler o arquivo inteiro. Modelo pequeno: confira o "
             "essencial no original se a resposta for crítica."
         ),
@@ -155,6 +167,7 @@ TOOLS: list[dict[str, Any]] = [
                     "description": "Foco do resumo (padrão: pontos principais em tópicos).",
                 },
                 "max_chars": {"type": "integer", "minimum": 1000, "default": 60000},
+                "effort": _EFFORT,
             },
             "required": ["path"],
         },
@@ -175,13 +188,17 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "system": {"type": "string"},
                 "max_tokens": {"type": "integer", "minimum": 16, "default": 800},
+                "effort": _EFFORT,
             },
             "required": ["prompt"],
         },
     },
     {
         "name": "status",
-        "description": "Mostra o que está ativo: Jev (orçamento, gasto do mês), LLM local e cache.",
+        "description": (
+            "Mostra o que está ativo: modo offline, Jev (orçamento, gasto do mês), LLM local e os "
+            "modelos de cada esforço, e o cache."
+        ),
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]
@@ -351,30 +368,11 @@ class Server:
         }
 
     def summarize_file(self, args: Mapping[str, Any]) -> str:
-        path = str(args.get("path") or "")
-        max_chars = int(args.get("max_chars") or 60_000)
-        text = _read_file(path, max_chars)
-        focus = str(args.get("instructions") or "Resuma os pontos principais em tópicos curtos.")
-        system = "Você resume documentos com fidelidade, sem inventar nada. Responda em português."
-        chunks = [text[i : i + CHUNK_CHARS] for i in range(0, len(text), CHUNK_CHARS)] or [""]
-        if len(chunks) == 1:
-            return self.app.write(focus, context=chunks[0], system=system, max_tokens=600)
-        partials = [
-            self.app.write(
-                f"Parte {n} de {len(chunks)} de um documento. Extraia o que importa para: {focus}",
-                context=chunk,
-                system=system,
-                max_tokens=300,
-            )
-            for n, chunk in enumerate(chunks, 1)
-        ]
-        joined = "\n\n".join(f"[Parte {n}]\n{p}" for n, p in enumerate(partials, 1))
-        return self.app.write(
-            f"Junte estes resumos parciais em um resumo final. {focus}",
-            context=joined,
-            system=system,
-            max_tokens=700,
-        )
+        effort = normalize_effort(args.get("effort"))
+        text = _read_file(str(args.get("path") or ""), int(args.get("max_chars") or 60_000))
+        if not text.strip():
+            raise ToolError("O arquivo está vazio: nada para resumir.")
+        return self.app.summarize(text, focus=args.get("instructions") or None, effort=effort)
 
     def write(self, args: Mapping[str, Any]) -> str:
         prompt = str(args.get("prompt") or "").strip()
@@ -385,12 +383,15 @@ class Server:
             context=args.get("context"),
             system=args.get("system"),
             max_tokens=int(args.get("max_tokens") or 800),
+            tier=WRITE_TIER[normalize_effort(args.get("effort"))],
         )
 
     def status(self, args: Mapping[str, Any]) -> dict[str, Any]:
         status = self.app.status()
         writer = self.app.writer
         status["writer"] = f"{writer.name} {getattr(writer, 'model', '')}".strip() if writer else None
+        if writer is not None:
+            status["effort_models"] = self.app.tier_models()
         return status
 
 
