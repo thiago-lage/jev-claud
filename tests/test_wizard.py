@@ -68,6 +68,10 @@ class FakeSystem(System):
             "old_jev": False,
             "old_mcp": False,
             "synced": False,  # jevin@synced: adicionado pelo diretório do Claude
+            # Com versão, `plugin list` sai no formato real (Version/Scope por instalação).
+            "plugin_version": None,
+            "plugin_scopes": ["user"],
+            "marketplace_version": "0.10.0",
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -99,6 +103,8 @@ class FakeSystem(System):
             self.state["old_marketplace"] = False
         elif command[1:3] == ["plugin", "install"]:
             self.state["plugin" if command[3] == "jevin@jev-claud" else "skill"] = True
+        elif command[1:3] == ["plugin", "update"]:
+            self.state["plugin_version"] = self.state["marketplace_version"]
         elif command[1:3] == ["plugin", "uninstall"]:
             names = {
                 "jev-claude@jev-claude": "old_plugin",
@@ -129,7 +135,24 @@ class FakeSystem(System):
                 )
                 if self.state[key]
             ]
-            return 0, "\n".join(installed) + "\n" if installed else "Nenhum plugin\n"
+            if not installed:
+                return 0, "Nenhum plugin\n"
+            version = self.state["plugin_version"]
+            if version is None:
+                return 0, "\n".join(installed) + "\n"
+            lines = ["Installed plugins:", ""]
+            for name in installed:
+                scopes = self.state["plugin_scopes"] if name == "jevin@jev-claud" else ["user"]
+                for scope in scopes:
+                    shown = version if name == "jevin@jev-claud" else "1.0.0"
+                    lines += [
+                        f"  > {name}",
+                        f"    Version: {shown}",
+                        f"    Scope: {scope}",
+                        "    Status: √ enabled",
+                        "",
+                    ]
+            return 0, "\n".join(lines)
         if list(command[1:4]) == ["plugin", "marketplace", "list"]:
             names = ["anthropic"]
             names += ["typesafe-ai"] if self.state["marketplace"] else []
@@ -591,6 +614,94 @@ def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Pat
     assert "duplicado: o jevin@synced do diretório só carrega sem o jevin@jev-claud" in out.getvalue()
     assert "/bin/claude plugin uninstall jevin@jev-claud" in [" ".join(c) for c in system.commands]
     assert report.results["plugin"] is True and system.state["plugin"] is False
+
+
+PLUGIN_LIST = """Installed plugins:
+
+  > typesafe@typesafe-ai
+    Version: 0.5.7
+    Scope: user
+    Status: √ enabled
+
+  > jevin@jev-claud
+    Version: 0.9.1
+    Scope: user
+    Status: √ enabled
+
+  > jevin@jev-claud
+    Version: 0.9.1
+    Scope: project
+    Status: √ enabled
+"""
+
+
+def test_plugin_versions_are_read_from_the_real_listing() -> None:
+    from jev_claud.wizard import _older, _plugin_entries
+
+    assert _plugin_entries(PLUGIN_LIST, "jevin@jev-claud") == [("0.9.1", "user"), ("0.9.1", "project")]
+    assert _plugin_entries(PLUGIN_LIST, "typesafe@typesafe-ai") == [("0.5.7", "user")]
+    assert _plugin_entries("jevin@jev-claud\n", "jevin@jev-claud") == [("", "")]
+    assert _older("0.9.1", "0.10.0") and not _older("0.10.0", "0.10.0")
+    assert not _older("0.11.0", "0.10.0") and not _older("", "0.10.0") and not _older("0.9.1", "")
+
+
+def test_stale_plugin_is_updated_by_setup(tmp_path: Path) -> None:
+    """Até a 0.10 o setup achava o Jevin "ok" em qualquer versão: a skill nova nunca chegava."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(
+        plugin=True, jev_marketplace=True, plugin_version="0.9.1", plugin_scopes=["user", "project"]
+    )
+    ui, out = make_ui()
+    setup = Setup(system=system, ui=ui, version="0.10.0")
+    assert setup._check_plugin() == (False, "versão 0.9.1: atualizar para 0.10.0")
+
+    assert setup.run("yes").results["plugin"] is True
+    commands = [" ".join(c) for c in system.commands]
+    assert "/bin/claude plugin marketplace update jev-claud" in commands
+    assert "/bin/claude plugin update -s user jevin@jev-claud" in commands
+    assert "claude plugin update -s project jevin@jev-claud" in out.getvalue()
+    assert setup._check_plugin() == (True, "jevin@jev-claud")
+
+
+def test_refresh_updates_only_what_is_installed(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    system.state.update(plugin=True, jev_marketplace=True, plugin_version="0.9.1")
+    rule = system.home / ".claude" / "CLAUDE.md"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(f"# Minhas\n\n{RULE_START}\nregra versão 4\n{RULE_END}\n", encoding="utf-8")
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.0").refresh() == 0
+    assert rule.read_text(encoding="utf-8") == f"# Minhas\n\n{CLAUDE_RULE}"
+    assert system.state["plugin_version"] == "0.10.0"
+    assert "atualizada para a versão" in out.getvalue() and "0.9.1 -> 0.10.0" in out.getvalue()
+
+    system.commands.clear()
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.0").refresh() == 0  # já atualizado: nada a fazer
+    assert system.commands == [] and "já está na versão atual" in out.getvalue()
+
+
+def test_refresh_installs_nothing_new(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.0").refresh() == 0
+    assert system.commands == []
+    assert not (system.home / ".claude" / "CLAUDE.md").exists()
+
+    system.state["synced"] = True
+    ui, out = make_ui()
+    Setup(system=system, ui=ui, version="0.10.0").refresh()
+    assert "diretório do Claude, que atualiza sozinho" in out.getvalue()
+
+
+def test_rule_mentions_ollama_and_every_effort_level() -> None:
+    for word in ("Ollama", "effort", "baixo", "medio", "alto", "extra", "max", "ultracode", "nuvem"):
+        assert word in CLAUDE_RULE
+
+
+def test_cli_update_refreshes_plugin_and_rule_in_a_new_process(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["update", "--dry-run"]) == 0
+    assert "-m jev_claud refresh" in capsys.readouterr().out
 
 
 def agents_system(tmp_path: Path) -> FakeSystem:

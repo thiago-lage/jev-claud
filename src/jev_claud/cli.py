@@ -22,7 +22,14 @@ from jev_claud.errors import JevClaudError
 from jev_claud.media import Image
 from jev_claud.models import forget_newest, resolve_model
 from jev_claud.questions import Question, box, choice, noul, score
-from jev_claud.wizard import DEV_PACKAGE_SPEC, PACKAGE_SPEC, Mode, needs_first_run, run_setup
+from jev_claud.wizard import (
+    DEV_PACKAGE_SPEC,
+    PACKAGE_SPEC,
+    Mode,
+    needs_first_run,
+    run_refresh,
+    run_setup,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -118,11 +125,18 @@ def _parser() -> argparse.ArgumentParser:
     spend.set_defaults(handler=_spend)
 
     update = sub.add_parser(
-        "update", help="atualiza o jev-claud, o SDK do Jev e redescobre o modelo mais novo"
+        "update",
+        help="atualiza o jev-claud, o SDK do Jev, o plugin Jevin e a regra global; redescobre o modelo",
     )
     update.add_argument("--dry-run", action="store_true")
     update.add_argument("--dev", action="store_true", help="versão em desenvolvimento, direto do GitHub")
     update.set_defaults(handler=_update)
+
+    refresh = sub.add_parser(
+        "refresh",
+        help="leva o plugin Jevin e a regra global já instalados para esta versão (o update chama sozinho)",
+    )
+    refresh.set_defaults(standalone=_refresh)
 
     cache = sub.add_parser("cache", help="gerencia o cache local de decisões")
     cache.add_argument("action", choices=["clear", "size"])
@@ -240,7 +254,7 @@ COMMANDS = (
     ("spend", "gastos e economia do mês"),
     ('ask "texto" --noul "pergunta?"', "decisão tipada pela linha de comando"),
     ('write "instrução"', "texto com a LLM local"),
-    ("update", "atualiza o jev-claud e o SDK do Jev"),
+    ("update", "atualiza o jev-claud, o SDK do Jev, o plugin e a regra"),
 )
 
 
@@ -291,6 +305,10 @@ def _print_routing(r: JevClaud) -> None:
 def _setup(args: argparse.Namespace) -> int:
     mode: Mode = "yes" if args.yes else "check" if args.check else "interactive"
     return run_setup(mode, ollama_model=args.model, version=__version__)
+
+
+def _refresh(args: argparse.Namespace) -> int:
+    return run_refresh(version=__version__)
 
 
 def _mcp(args: argparse.Namespace) -> int:
@@ -364,6 +382,8 @@ def _update(r: JevClaud, args: argparse.Namespace) -> int:
     if self_upgrade:
         spec = DEV_PACKAGE_SPEC if args.dev else PACKAGE_SPEC
         commands.append([sys.executable, "-m", "pip", "install", "--upgrade", spec])
+    # Num processo novo, para rodar o código que o pip acabou de instalar (plugin e regra novos).
+    commands.append([sys.executable, "-m", "jev_claud", "refresh"])
     for command in commands:
         print("$ " + " ".join(command))
         if not args.dry_run:

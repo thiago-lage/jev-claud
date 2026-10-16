@@ -56,6 +56,10 @@ Quanto mais alto, mais lento (é tudo local); use o menor que resolve. Em sessã
 ferramentas não existem (o MCP e o Ollama ficam no computador da pessoa): leia você mesmo,
 com `offset`/`limit`, e delegue a exploração ao `jevin:scout`.
 
+O Ollama local é o motor grátis do `summarize_file` e do `write`: use-o em todo texto longo que
+não seja código que você vai editar (logs, relatórios, transcrições, documentação de terceiros,
+rascunhos de prosa), em vez de ler tudo no seu contexto.
+
 Não use para: código-fonte que você vai alterar (leia-o você mesmo), perguntas pequenas
 e únicas (responder direto custa menos) ou gerar código (nunca).
 

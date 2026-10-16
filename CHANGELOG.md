@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.10.1] - 2026-10-16
+
+### Corrigido
+
+- **O plugin Jevin e a regra global não acompanhavam as versões novas.** O `jev-claud update`
+  só atualizava o pacote Python, e o `jev-claud setup` considerava o plugin "ok" em qualquer
+  versão. Resultado: as sessões continuavam com a skill e a regra antigas, sem os níveis de
+  esforço. Agora o `update` termina com o `jev-claud refresh`, num processo novo, que atualiza o
+  marketplace e o plugin e reescreve a regra no `CLAUDE.md` (e no `AGENTS.md` do Codex). O
+  `setup` também detecta o plugin antigo e o atualiza.
+
+### Alterado
+
+- Regra global versão 5: o Ollama é o motor grátis do `summarize_file` e do `write` para todo
+  texto longo que não seja código a editar, com os níveis de esforço de `baixo` a `ultracode`, e
+  as ferramentas MCP não existem nas sessões na nuvem. Código continua sempre com o Claude.
+- Skill `jev`: o mesmo destaque para o Ollama.
+
 ## [0.10.0] - 2026-10-15
 
 ### Adicionado

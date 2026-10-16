@@ -58,15 +58,15 @@ OLD_MARKETPLACE = "jev-claude"
 OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
-RULE_VERSION = 4
+RULE_VERSION = 5
 CLAUDE_RULE = f"""{RULE_START}
-<!-- versão {RULE_VERSION}: o `jev-claud setup` substitui este bloco inteiro ao atualizar -->
+<!-- versão {RULE_VERSION}: o `jev-claud setup` e o `jev-claud update` substituem este bloco inteiro -->
 ## Como trabalhar
 
 - Pedido de mudança em código: **implemente direto**. Edite os arquivos, rode os testes e
   mostre o resultado. Não devolva o código no chat para a pessoa colar, a não ser que ela peça.
 - Nunca delegue escrita ou edição de código ao Ollama/Jev: a qualidade da entrega é sua.
-  As ferramentas `jev-claud` só servem para poupar contexto (ver abaixo).
+  O Ollama e o Jev entram em todo o resto que poupa contexto (ver abaixo).
 
 ## Quando o código que você escreve usa IA: Jev vs. LLM
 
@@ -79,10 +79,17 @@ CLAUDE_RULE = f"""{RULE_START}
 - Ao integrar, leia https://docs.typesafe.ai/llms.txt (no Claude Code, use também a skill
   `typesafe:typesafe-ai`).
 
-## Poupar contexto
+## Poupar contexto com o Ollama local (grátis)
 
 - Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
   MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
+- O Ollama é o motor grátis do `summarize_file` e do `write`: use-o em todo texto longo que não
+  seja código que você vai editar (logs, relatórios, transcrições, documentação de terceiros,
+  rascunhos de prosa). Leia o original só no trecho que o resumo apontar.
+- Passe `effort`, com os mesmos níveis do seletor do Claude: `baixo` (triagem), `medio` (padrão),
+  `alto` ou `extra` (os detalhes importam), `max` (o melhor que o local consegue) e `ultracode`
+  (`max` mais uma revisão contra as fontes; use antes de afirmar algo crítico).
+- Na sessão em nuvem as ferramentas MCP não existem: leia com `offset`/`limit`.
 - Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
 - Saída de teste ou build com o rodapé `[jev-claud] saída compactada`: a saída completa está no
   caminho indicado ali, se precisar.
@@ -267,6 +274,36 @@ class UI:
 def _listed(output: str, name: str) -> bool:
     """`name` aparece como item (não só como parte de outro nome) na saída de uma listagem."""
     return any(name in line.replace("❯", " ").split() for line in output.splitlines())
+
+
+def _plugin_entries(output: str, name: str) -> list[tuple[str, str]]:
+    """(versão, escopo) de cada instalação de `name` na saída de `claude plugin list`."""
+    entries: list[tuple[str, str]] = []
+    inside = False
+    for line in output.splitlines():
+        words = line.replace("❯", " ").replace(">", " ").split()
+        if not words:
+            continue
+        if "@" in words[0] and ":" not in words[0]:
+            inside = words[0] == name
+            if inside:
+                entries.append(("", ""))
+            continue
+        if inside and len(words) >= 2 and words[0] in ("Version:", "Scope:"):
+            version, scope = entries[-1]
+            entries[-1] = (words[1], scope) if words[0] == "Version:" else (version, words[1])
+    return entries
+
+
+def _older(found: str, wanted: str) -> bool:
+    """`found` é uma versão anterior a `wanted`? Versões que não são X.Y.Z nunca são "anteriores"."""
+
+    def parse(text: str) -> tuple[int, ...] | None:
+        parts = text.strip().lstrip("v").split(".")[:3]
+        return tuple(int(p) for p in parts) if len(parts) == 3 and all(p.isdigit() for p in parts) else None
+
+    old, new = parse(found), parse(wanted)
+    return old is not None and new is not None and old < new
 
 
 def _load_json_object(path: Path) -> dict[str, Any] | None:
@@ -851,7 +888,32 @@ class Setup:
             if old is not None:
                 return False, f"nome antigo ({old}): atualizar para {PLUGIN_ID}"
             return False, "não instalado"
+        stale = self._stale_plugin_versions(output)
+        if stale:
+            return False, f"versão {stale[0]}: atualizar para {self.version}"
         return True, PLUGIN_ID
+
+    def _stale_plugin_versions(self, output: str) -> list[str]:
+        """Versões instaladas do Jevin anteriores a esta do jev-claud (skill e subagente velhos)."""
+        return [v for v, _ in _plugin_entries(output, PLUGIN_ID) if self.version and _older(v, self.version)]
+
+    def _update_plugin(self, path: str, output: str) -> bool:
+        """Leva o Jevin do marketplace para a versão mais nova, em cada escopo instalado."""
+        entries = _plugin_entries(output, PLUGIN_ID)
+        if not self._stale_plugin_versions(output):
+            return True
+        self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
+        ok = True
+        if any(scope in ("user", "") for _, scope in entries):
+            ok = self.sys.run([path, "plugin", "update", "-s", "user", PLUGIN_ID]) == 0
+        if any(scope == "project" for _, scope in entries):
+            self.ui.note(
+                "O Jevin também está instalado por projeto: em cada um deles, rode "
+                f"`claude plugin update -s project {PLUGIN_ID}`."
+            )
+        if ok:
+            self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
+        return ok
 
     def _install_plugin(self) -> bool:
         path = self._claude()
@@ -871,6 +933,8 @@ class Setup:
             if self.sys.run([path, "plugin", "install", PLUGIN_ID]) != 0:
                 return False
             self.ui.note("Vale para as próximas sessões do Claude Code (abra uma nova).")
+        elif not self._update_plugin(path, output):
+            return False
         for old in OLD_PLUGIN_IDS:
             if _listed(output, old):
                 self.sys.run([path, "plugin", "uninstall", old])
@@ -959,6 +1023,46 @@ class Setup:
             if RULE_START in text or OLD_RULE_MARKERS[0] in text:
                 return False, "versão antiga: atualizar"
         return False, missing
+
+    def _rule_outdated(self, path: Path) -> bool:
+        """A regra do jev-claud está em `path`, mas numa versão anterior."""
+        if not self.sys.exists(path):
+            return False
+        text = path.read_text(encoding="utf-8")
+        has_rule = RULE_START in text or OLD_RULE_MARKERS[0] in text
+        return has_rule and CLAUDE_RULE.strip() not in text
+
+    def refresh(self) -> int:
+        """Depois do `jev-claud update`: leva o que já está instalado para esta versão.
+
+        Só atualiza o que existe (regra no CLAUDE.md e no AGENTS.md do Codex, plugin Jevin);
+        não instala nada novo. Roda no processo da versão nova, para usar a regra nova.
+        """
+        failed = False
+        for rule, title in (
+            (self.claude_md, "Regra global do Claude"),
+            (self._codex_rule_path(), "Regra do Codex"),
+        ):
+            if self._rule_outdated(rule):
+                self._write_rule_to(rule)
+                self.ui.status("ok", title, f"atualizada para a versão {RULE_VERSION}")
+        path = self._claude()
+        if path:
+            code, output = self.sys.capture([path, "plugin", "list"])
+            if code == 0 and _listed(output, PLUGIN_ID):
+                stale = self._stale_plugin_versions(output)
+                if not stale:
+                    self.ui.status("ok", "Plugin Jevin", "já está na versão atual")
+                elif self._update_plugin(path, output):
+                    self.ui.status("ok", "Plugin Jevin", f"{stale[0]} -> {self.version}")
+                else:
+                    failed = True
+                    self.ui.status(
+                        "no", "Plugin Jevin", f"não atualizou: rode `claude plugin update {PLUGIN_ID}`"
+                    )
+            elif code == 0 and _listed(output, PLUGIN_SYNCED_ID):
+                self.ui.status("ok", "Plugin Jevin", "vem do diretório do Claude, que atualiza sozinho")
+        return 1 if failed else 0
 
     def _write_rule_to(self, path: Path) -> bool:
         """Acrescenta a regra ou troca o bloco antigo entre os marcadores, preservando o resto."""
@@ -1091,6 +1195,10 @@ def savings_footer() -> str | None:
 def run_setup(mode: Mode = "interactive", *, ollama_model: str | None = None, version: str = "") -> int:
     report = Setup(ollama_model=ollama_model, version=version).run(mode)
     return 0 if report.ok else 1
+
+
+def run_refresh(*, version: str = "") -> int:
+    return Setup(version=version).refresh()
 
 
 def needs_first_run() -> bool:

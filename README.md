@@ -71,6 +71,10 @@ curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.
 Pronto. Abra uma conversa nova e trabalhe normalmente. Para conferir se está tudo ativo:
 `jev-claud setup --check`.
 
+**Para atualizar**, rode `jev-claud update`. Ele atualiza tudo de uma vez: o pacote, o SDK do
+Jev, o plugin Jevin (skill e subagente) e a regra global no `~/.claude/CLAUDE.md`. Depois,
+abra conversas novas: as que já estavam abertas continuam com a versão antiga.
+
 ### Por que não preciso chamar nada?
 
 Cada peça fica na configuração do Claude Code, que ele carrega sozinho em toda sessão:
@@ -570,7 +574,8 @@ jev-claud ask "Preciso disso hoje" --noul "É urgente?"
 jev-claud write "Explique o plano Pro em 2 frases"
 jev-claud models                       # modelos Jev disponíveis na conta
 jev-claud spend                        # gastos registrados por mês
-jev-claud update                       # atualiza jev-claud e typesafe-sdk, redescobre o modelo mais novo
+jev-claud update                       # atualiza jev-claud, typesafe-sdk, plugin Jevin e regra global
+jev-claud refresh                      # só o plugin Jevin e a regra global (o update já chama)
 jev-claud cache clear
 ```
 
