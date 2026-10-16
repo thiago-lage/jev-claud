@@ -95,6 +95,8 @@ def test_cli_doctor(capsys: pytest.CaptureFixture[str]) -> None:
     assert "offline" in out and "nenhuma" in out
     assert main(["doctor", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["budget"]["zero_cost"] is True
+    assert main(["status", "--json"]) == 0  # apelido do doctor
+    assert json.loads(capsys.readouterr().out)["budget"]["zero_cost"] is True
 
 
 def test_cli_spend_update_cache_models(capsys: pytest.CaptureFixture[str]) -> None:

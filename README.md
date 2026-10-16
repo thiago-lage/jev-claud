@@ -571,7 +571,7 @@ jev-claud mcp                          # servidor MCP (stdio) usado pelo Claude 
 jev-claud rule                         # a regra "Jev ramifica, LLM escreve" para colar em outro agente
 jev-claud run -- pytest -x            # roda teste/build e compacta a saída (sem LLM)
 npm test 2>&1 | jev-claud compact     # o mesmo, como filtro de texto
-jev-claud doctor                       # backends ativos, modelo, orçamento, cache
+jev-claud doctor                       # backends ativos, modelo, orçamento, cache (ou: jev-claud status)
 jev-claud ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 jev-claud ask "Preciso disso hoje" --noul "É urgente?"
 jev-claud write "Explique o plano Pro em 2 frases"

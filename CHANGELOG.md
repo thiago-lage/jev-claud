@@ -5,6 +5,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+### Adicionado
+
+- **`jev-claud status` como apelido do `doctor`.** Mesmo nome da ferramenta MCP `status`; antes o
+  comando falhava com "invalid choice".
+
 ### Corrigido
 
 - **O `jev-claud update` mostra cada comando antes da etapa dele.** As linhas `$ <comando>` (pip do

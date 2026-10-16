@@ -1,6 +1,7 @@
 """Linha de comando do jev-claud.
 
-Subcomandos: setup, mcp, compact, run, hook, rule, doctor, ask, write, models, spend, update, cache.
+Subcomandos: setup, mcp, compact, run, hook, rule, doctor (ou status), ask, write, models, spend,
+update, cache.
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     rule.set_defaults(standalone=_rule)
 
-    doctor = sub.add_parser("doctor", help="mostra backends ativos, orçamento e cache")
+    doctor = sub.add_parser("doctor", aliases=["status"], help="mostra backends ativos, orçamento e cache")
     doctor.add_argument("--json", action="store_true")
     doctor.set_defaults(handler=_doctor)
 
