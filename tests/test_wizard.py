@@ -852,6 +852,36 @@ def test_cli_update_refreshes_plugin_and_rule_in_a_new_process(capsys: pytest.Ca
     assert "-m jev_claud refresh" in capsys.readouterr().out
 
 
+class FlushTrackingStdout(io.StringIO):
+    """stdout que separa o que já foi descarregado do que ainda está no buffer."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.flushed = ""
+
+    def flush(self) -> None:
+        self.flushed = self.getvalue()
+
+
+def test_cli_update_prints_each_command_before_running_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    stdout = FlushTrackingStdout()
+    seen: list[str] = []
+
+    def fake_run(command: Sequence[str], check: bool) -> Any:
+        # O subprocesso escreve direto no terminal: a linha `$ ...` já tem de ter saído.
+        assert stdout.flushed == stdout.getvalue()
+        assert stdout.flushed.endswith("$ " + " ".join(command) + "\n")
+        seen.append(command[-1])
+        return type("Done", (), {"returncode": 0})()
+
+    monkeypatch.setattr("jev_claud.cli._installed_editable", lambda: False)
+    monkeypatch.setattr("jev_claud.cli._running_windows_launcher", lambda: False)
+    monkeypatch.setattr("jev_claud.cli.subprocess.run", fake_run)
+    monkeypatch.setattr(sys, "stdout", stdout)
+    assert main(["update"]) == 0
+    assert seen == ["typesafe-sdk", PACKAGE_SPEC, "refresh"]
+
+
 def agents_system(tmp_path: Path) -> FakeSystem:
     """Claude Code pronto; Cursor e Codex instalados (CODEX_HOME aponta para a pasta de teste)."""
     system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)

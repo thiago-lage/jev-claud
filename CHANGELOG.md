@@ -3,6 +3,14 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Corrigido
+
+- **O `jev-claud update` mostra cada comando antes da etapa dele.** As linhas `$ <comando>` (pip do
+  `typesafe-sdk`, pip do `jev-claud[jev]` e `refresh`) ficavam no buffer e saíam todas no fim,
+  depois da saída do pip e do refresh. Agora cada uma é descarregada antes de o subprocesso rodar.
+
 ## [0.10.2] - 2026-10-16
 
 ### Adicionado

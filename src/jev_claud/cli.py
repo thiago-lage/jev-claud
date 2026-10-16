@@ -385,7 +385,8 @@ def _update(r: JevClaud, args: argparse.Namespace) -> int:
     # Num processo novo, para rodar o código que o pip acabou de instalar (plugin e regra novos).
     commands.append([sys.executable, "-m", "jev_claud", "refresh"])
     for command in commands:
-        print("$ " + " ".join(command))
+        # flush: o subprocesso escreve direto no terminal; sem ele a linha sairia depois da etapa.
+        print("$ " + " ".join(command), flush=True)
         if not args.dry_run:
             completed = subprocess.run(command, check=False)
             if completed.returncode != 0:
