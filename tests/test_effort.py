@@ -29,8 +29,12 @@ def test_normalize_effort_accepts_aliases_and_rejects_unknown() -> None:
     assert normalize_effort("ALTO") == "alto"
     assert normalize_effort("low") == "baixo"
     assert normalize_effort("médio") == "medio"
-    with pytest.raises(ValueError, match="baixo, medio ou alto"):
-        normalize_effort("máximo")
+    assert normalize_effort("xhigh") == "extra"
+    assert normalize_effort("Máximo") == "max"
+    assert normalize_effort("máx") == "max"
+    assert normalize_effort("UltraCode") == "ultracode"
+    with pytest.raises(ValueError, match="baixo, medio, alto, extra, max, ultracode"):
+        normalize_effort("turbo")
 
 
 def test_split_text_cuts_on_boundaries_and_keeps_every_word() -> None:
@@ -145,6 +149,26 @@ def test_summarize_routes_parts_and_merge_to_their_tiers() -> None:
     r.summarize(text, effort="alto")
     assert set(calls[:-1]) == {"padrao-7b"} and calls[-1] == "forte-14b"
     r.close()
+
+
+def test_max_uses_strong_everywhere_and_ultracode_reviews_against_sources() -> None:
+    calls: list[str] = []
+    r = _app(FakeEndpoint(calls), ollama_model_fast="rapido-1b", ollama_model_strong="forte-14b")
+    text = "Uma frase com fatos. " * 1_000
+    r.summarize(text, effort="max")
+    assert set(calls) == {"forte-14b"}
+    max_calls = len(calls)
+    calls.clear()
+    assert r.summarize(text, effort="ultracode") == "forte-14b: ok"
+    assert set(calls) == {"forte-14b"} and len(calls) == max_calls + 1
+    r.close()
+
+    prompts: list[str] = []
+    review = _app(CallableWriter(lambda p, s: prompts.append(p) or f"r{len(prompts)}"))
+    assert review.summarize("Reunião: lançamos na sexta.", effort="ultracode") == "r2"
+    assert prompts[-1].startswith("Revise o RESUMO") and "FONTES:\nReunião" in prompts[-1]
+    assert "RESUMO:\nr1" in prompts[-1]
+    review.close()
 
 
 def test_summarize_merges_hierarchically_when_partials_are_long() -> None:

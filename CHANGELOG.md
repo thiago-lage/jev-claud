@@ -7,6 +7,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ### Adicionado
 
+- **Esforços `extra`, `max` e `ultracode`**, completando os seis níveis do seletor do app do
+  Claude. `extra` e `max` usam blocos menores e o modelo forte; `ultracode` é `max` mais uma
+  revisão do resumo final contra os resumos parciais, que remove o que não estiver apoiado neles.
+  Aceita também `xhigh`, `máx` e `máximo`.
+- README e skill dizem onde o esforço local e o modo offline funcionam: neste computador e no
+  Remote Control, não nas sessões na nuvem (lá não há o MCP nem o Ollama).
 - **Esforço na camada local (`baixo`, `medio`, `alto`).** `summarize_file` e `write` (MCP) e
   `JevClaud.summarize`/`JevClaud.write(tier=...)` (biblioteca) quebram o trabalho entre modelos
   do Ollama: blocos no modelo rápido (`JEV_CLAUD_OLLAMA_MODEL_FAST`), junção no padrão ou no forte

@@ -41,8 +41,9 @@ Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do C
 - Decisão tipada que o código vai ramificar: `decide` (TypeSafe Jev; offline grátis sem orçamento).
 - Texto em prosa longo ou repetitivo em que um modelo pequeno basta: `write` (Ollama local).
   Revise antes de mostrar ao usuário: a LLM local é bem menos capaz que o Claude.
-- `effort` (baixo, medio, alto) em `summarize_file` e `write` escolhe quanto trabalho e qual
-  modelo local usar: baixo para triagem rápida, alto quando a fidelidade importa. Tudo grátis.
+- `effort` (baixo, medio, alto, extra, max, ultracode) em `summarize_file` e `write` escolhe
+  quanto trabalho e qual modelo local usar: baixo para triagem rápida, alto ou acima quando a
+  fidelidade importa, ultracode para revisar o resumo contra as fontes. Tudo grátis.
 Nunca use estas ferramentas para escrever, gerar ou editar código: implemente você mesmo,
 editando os arquivos. Para uma pergunta pequena e única, responda direto."""
 
@@ -51,8 +52,10 @@ _EFFORT = {
     "enum": list(EFFORTS),
     "default": "medio",
     "description": (
-        "Quanto trabalho a LLM local faz: baixo (blocos grandes, modelo rápido), medio (padrão) ou "
-        "alto (blocos menores com sobreposição, modelo forte na junção). Sempre grátis e local."
+        "Quanto trabalho a LLM local faz, como o seletor de esforço do Claude: baixo (blocos grandes, "
+        "modelo rápido), medio (padrão), alto e extra (blocos menores, modelo forte na junção), max "
+        "(os menores blocos, modelo forte em tudo) e ultracode (max + revisão do resumo contra as "
+        "fontes). Sempre grátis e local."
     ),
 }
 

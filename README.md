@@ -86,11 +86,16 @@ Cada peça fica na configuração do Claude Code, que ele carrega sozinho em tod
 
 No app desktop, a sessão pode rodar em três lugares:
 
-| Sessão | Funciona? | Por quê |
-| --- | --- | --- |
-| **Este computador** | Sim, tudo | Usa o `~/.claude` e o jev-claud instalados nesta máquina |
-| **Remote Control** | Sim, tudo | É uma sessão deste computador, controlada pelo celular ou pela web |
-| **Nuvem** | Só o plugin, se o repositório pedir | Roda numa máquina da Anthropic que clona o repositório: o hook, o MCP, a regra global e o Ollama do seu computador não vão junto |
+| Sessão | Funciona? | Esforço local e modo offline | Por quê |
+| --- | --- | --- | --- |
+| **Este computador** | Sim, tudo | Sim | Usa o `~/.claude`, o jev-claud e o Ollama desta máquina |
+| **Remote Control** | Sim, tudo | Sim | É uma sessão deste computador, controlada pelo celular ou pela web |
+| **Nuvem** | Só o plugin, se o repositório pedir | **Não** | Roda numa máquina da Anthropic que clona o repositório: o hook, o MCP, a regra global e o Ollama do seu computador não vão junto |
+
+Na nuvem, o que continua valendo é o plugin: a skill `jev` e o subagente `scout` (Haiku, esforço
+baixo). Os níveis de esforço (`baixo` a `ultracode`) e o `JEV_CLAUD_OFFLINE` dependem do servidor
+MCP e do Ollama, que só existem no seu computador. Para usá-los fora de casa, use o
+**Remote Control**: a sessão continua rodando na sua máquina.
 
 Para ter o Jevin também nas sessões na nuvem, declare o plugin no `.claude/settings.json` do
 repositório (o Claude Code instala os plugins declarados ali):
@@ -106,16 +111,28 @@ repositório (o Claude Code instala os plugins declarados ali):
 
 ### Esforço por modelo, offline e grátis
 
-O seletor do app escolhe o modelo e o esforço **do Claude**. O jev-claud faz o mesmo na camada
-local, que é grátis: o texto grande é quebrado em blocos, os blocos vão a um modelo rápido do
-Ollama e a junção a um modelo mais capaz. O Claude escolhe o esforço em cada chamada de
+O seletor do app escolhe o modelo e o esforço **do Claude** (Baixo, Médio, Alto, Extra, Máx,
+Ultracode). O jev-claud tem os mesmos seis níveis na camada local, que roda no seu computador
+de graça e sem internet. O texto grande é quebrado em blocos: cada bloco é resumido por um
+modelo do Ollama e, no fim, outro modelo junta os resumos parciais. Quanto mais alto o esforço,
+menores os blocos e mais forte o modelo. O Claude escolhe o nível em cada chamada de
 `summarize_file` e `write`:
 
-| Esforço | Blocos | Modelo dos blocos | Modelo da junção |
-| --- | --- | --- | --- |
-| `baixo` | grandes, sem sobreposição | rápido | rápido |
-| `medio` (padrão) | médios, pouca sobreposição | rápido | padrão |
-| `alto` | menores, mais sobreposição | padrão | forte |
+| Seletor do Claude | `effort` no jev-claud | Blocos | Modelo dos blocos | Modelo da junção | Revisão |
+| --- | --- | --- | --- | --- | --- |
+| Baixo | `baixo` | grandes, sem sobreposição | rápido | rápido | não |
+| Médio | `medio` (padrão) | médios, pouca sobreposição | rápido | padrão | não |
+| Alto | `alto` | menores, mais sobreposição | padrão | forte | não |
+| Extra | `extra` | pequenos, mais sobreposição | padrão | forte | não |
+| Máx | `max` | os menores, mais sobreposição | forte | forte | não |
+| Ultracode | `ultracode` | como `max` | forte | forte | sim |
+
+A **revisão** do `ultracode` é uma passada a mais do modelo forte: ele confere o resumo final
+contra os resumos parciais e remove o que não estiver apoiado neles. É o nível mais lento e o
+mais fiel. Os nomes em inglês também valem (`low`, `medium`, `high`, `xhigh`), assim como
+`médio`, `máx` e `máximo`.
+
+Cada camada usa um modelo do Ollama que você escolhe:
 
 ```bash
 ollama pull llama3.2:1b && ollama pull llama3.2 && ollama pull qwen2.5:7b
@@ -128,16 +145,34 @@ $env:JEV_CLAUD_OLLAMA_MODEL_STRONG = "qwen2.5:7b"   # forte
 $env:JEV_CLAUD_OFFLINE = "1"                        # garante: nada sai da máquina
 ```
 
-- Sem os modelos rápido e forte, tudo usa o padrão: nada quebra sem configuração extra.
-- Modelo que falha (ex.: não foi baixado) cai no padrão, uma vez, e fica de fora até o fim da sessão.
-- A junção é hierárquica: o modelo pequeno nunca recebe mais que um bloco de cada vez.
-- Uma parte que falha não derruba o resumo: ela fica de fora e o resumo avisa.
-- `JEV_CLAUD_OFFLINE=1` desliga o Jev de vez (mesmo com orçamento) e só aceita LLM nesta máquina
-  ou na rede local. `jev-claud doctor` mostra o modo e o modelo de cada esforço.
+Sem os modelos rápido e forte, tudo usa o padrão: nada quebra sem configuração extra.
 
-As respostas do próprio Claude continuam gastando o limite do seu plano: elas não rodam
-offline. O que o jev-claud faz é mandar para o Claude menos coisa para ler. O subagente
-`scout` do plugin roda no Haiku com esforço baixo, então explorar o código também gasta menos.
+> **Onde funciona:** neste computador e no Remote Control. Nas sessões na **nuvem**, não: lá não
+> há o servidor MCP nem o Ollama (veja [Em que sessões funciona](#em-que-sessões-funciona)).
+
+**O que deixa o resumo robusto:**
+
+- **O corte cai em parágrafo, linha ou frase**, nunca no meio de uma palavra, e cada bloco
+  repete um pedaço do anterior para não perder o que ficou na emenda.
+- **A junção acontece em etapas:** se os resumos parciais forem grandes demais, eles são
+  juntados em rodadas, e o modelo pequeno nunca recebe mais que um bloco de cada vez.
+- **Uma parte que falha não derruba o resumo:** ela fica de fora e o resumo avisa
+  ("1 de 5 partes falharam").
+- **Se o modelo de uma camada falhar** (por exemplo, porque não foi baixado), a chamada é
+  refeita com o modelo padrão, e esse modelo deixa de ser tentado até o fim da sessão.
+
+**Modo offline estrito (`JEV_CLAUD_OFFLINE=1`):**
+
+- o Jev (pago) nunca é chamado, mesmo que exista orçamento configurado;
+- o texto só vai para uma LLM neste computador ou na rede local (`localhost`, `192.168.x.x`...).
+  Um endpoint na internet é recusado ou ignorado;
+- `jev-claud doctor` e a ferramenta `status` mostram se o modo está ligado e qual modelo cada
+  esforço usa.
+
+**E o Claude?** As respostas do próprio Claude continuam gastando o limite do seu plano: elas
+rodam nos servidores da Anthropic, não offline. O jev-claud faz o trabalho pesado de graça na
+sua máquina e manda ao Claude menos coisa para ler. O subagente `scout` do plugin roda no Haiku
+com esforço baixo, então explorar o código também gasta menos.
 
 ## Para desenvolvedores: decisões tipadas no seu código
 

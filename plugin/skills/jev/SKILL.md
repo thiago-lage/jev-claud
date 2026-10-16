@@ -40,13 +40,21 @@ você vai editar:
 - `decide`: uma decisão tipada pontual.
 - `status`: o que está ativo (modo offline, Jev, Ollama, modelos de cada esforço, cache).
 
-`summarize_file` e `write` aceitam `effort` (`baixo`, `medio`, `alto`), sempre grátis e local:
+`summarize_file` e `write` aceitam `effort`, com os mesmos níveis do seletor do app, sempre
+grátis e local:
 
 | Esforço | Quando | O que a LLM local faz |
 | --- | --- | --- |
 | `baixo` | triagem: "vale a pena ler isto?" | blocos grandes, tudo no modelo rápido |
 | `medio` (padrão) | resumo de uso geral | blocos no modelo rápido, junção no padrão |
 | `alto` | a fidelidade importa (relatório, decisão) | blocos menores com sobreposição, junção no modelo forte |
+| `extra` | documento denso, detalhes contam | blocos pequenos, junção no modelo forte |
+| `max` | precisa do melhor que o local consegue | os menores blocos, modelo forte em tudo |
+| `ultracode` | vai afirmar algo crítico com base no resumo | como `max`, mais uma revisão contra as fontes |
+
+Quanto mais alto, mais lento (é tudo local); use o menor que resolve. Em sessão na nuvem essas
+ferramentas não existem (o MCP e o Ollama ficam no computador da pessoa): leia você mesmo,
+com `offset`/`limit`, e delegue a exploração ao `jevin:scout`.
 
 Não use para: código-fonte que você vai alterar (leia-o você mesmo), perguntas pequenas
 e únicas (responder direto custa menos) ou gerar código (nunca).

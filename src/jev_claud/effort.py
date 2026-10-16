@@ -4,11 +4,19 @@ Espelha o seletor de esforço do Claude, mas na camada grátis e offline: o text
 quebrado em blocos, os blocos vão a um modelo local rápido e a junção final a um modelo mais
 capaz. Tudo roda na LLM local (Ollama por padrão): nada sai da máquina, nada é cobrado.
 
-| Esforço | Blocos                         | Modelo dos blocos | Modelo da junção |
-| ------- | ------------------------------ | ----------------- | ---------------- |
-| baixo   | grandes, sem sobreposição      | rápido            | rápido           |
-| medio   | médios, pouca sobreposição     | rápido            | padrão           |
-| alto    | menores, mais sobreposição     | padrão            | forte            |
+Os níveis seguem o seletor de esforço do app do Claude:
+
+| Esforço   | Blocos                         | Modelo dos blocos | Modelo da junção | Revisão |
+| --------- | ------------------------------ | ----------------- | ---------------- | ------- |
+| baixo     | grandes, sem sobreposição      | rápido            | rápido           | não     |
+| medio     | médios, pouca sobreposição     | rápido            | padrão           | não     |
+| alto      | menores, mais sobreposição     | padrão            | forte            | não     |
+| extra     | pequenos, mais sobreposição    | padrão            | forte            | não     |
+| max       | os menores, mais sobreposição  | forte             | forte            | não     |
+| ultracode | como `max`                     | forte             | forte            | sim     |
+
+A revisão do `ultracode` é uma passada a mais do modelo forte, que confere o resumo final
+contra os resumos parciais e tira o que não estiver apoiado neles.
 
 Os modelos de cada camada vêm de `JEV_CLAUD_OLLAMA_MODEL_FAST` (rápido),
 `JEV_CLAUD_OLLAMA_MODEL` (padrão) e `JEV_CLAUD_OLLAMA_MODEL_STRONG` (forte). Camada sem modelo
@@ -20,10 +28,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Effort = Literal["baixo", "medio", "alto"]
+Effort = Literal["baixo", "medio", "alto", "extra", "max", "ultracode"]
 Tier = Literal["rapido", "padrao", "forte"]
 
-EFFORTS: tuple[Effort, ...] = ("baixo", "medio", "alto")
+EFFORTS: tuple[Effort, ...] = ("baixo", "medio", "alto", "extra", "max", "ultracode")
 TIERS: tuple[Tier, ...] = ("rapido", "padrao", "forte")
 DEFAULT_EFFORT: Effort = "medio"
 
@@ -32,6 +40,10 @@ _ALIASES: dict[str, Effort] = {
     "medium": "medio",
     "médio": "medio",
     "high": "alto",
+    "xhigh": "extra",
+    "máx": "max",
+    "maximo": "max",
+    "máximo": "max",
 }
 
 
@@ -49,20 +61,32 @@ class EffortPlan:
     """Limite de resposta da junção final."""
     part_tier: Tier
     final_tier: Tier
+    verify: bool = False
+    """Revisa o resumo final contra os parciais, tirando o que não estiver apoiado neles."""
 
 
 PLANS: dict[Effort, EffortPlan] = {
     "baixo": EffortPlan(9_000, 0, 200, 450, "rapido", "rapido"),
     "medio": EffortPlan(6_000, 300, 300, 700, "rapido", "padrao"),
     "alto": EffortPlan(4_000, 500, 400, 1_000, "padrao", "forte"),
+    "extra": EffortPlan(3_000, 500, 450, 1_200, "padrao", "forte"),
+    "max": EffortPlan(2_500, 600, 500, 1_400, "forte", "forte"),
+    "ultracode": EffortPlan(2_500, 600, 500, 1_400, "forte", "forte", verify=True),
 }
 
-WRITE_TIER: dict[Effort, Tier] = {"baixo": "rapido", "medio": "padrao", "alto": "forte"}
+WRITE_TIER: dict[Effort, Tier] = {
+    "baixo": "rapido",
+    "medio": "padrao",
+    "alto": "forte",
+    "extra": "forte",
+    "max": "forte",
+    "ultracode": "forte",
+}
 """Camada de modelo usada por um `write` simples em cada esforço."""
 
 
 def normalize_effort(effort: str | None) -> Effort:
-    """`baixo` | `medio` | `alto` (aceita também `low`, `medium`, `high` e `médio`)."""
+    """Um dos `EFFORTS`. Aceita também `low`, `medium`, `high`, `xhigh`, `médio`, `máx` e `máximo`."""
     if effort is None or not str(effort).strip():
         return DEFAULT_EFFORT
     key = str(effort).strip().lower()
@@ -70,7 +94,7 @@ def normalize_effort(effort: str | None) -> Effort:
     for name in EFFORTS:
         if key == name:
             return name
-    raise ValueError(f"Esforço deve ser baixo, medio ou alto, recebido {effort!r}.")
+    raise ValueError(f"Esforço deve ser {', '.join(EFFORTS)}; recebido {effort!r}.")
 
 
 def effort_plan(effort: str | None) -> EffortPlan:

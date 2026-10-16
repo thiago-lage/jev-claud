@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from jev_claud import CallableWriter, JevClaud
-from jev_claud.effort import PLANS
+from jev_claud.effort import EFFORTS, PLANS
 from jev_claud.mcp import MAX_ITEMS, TOOLS, Server, serve
 
 CHUNK_CHARS = PLANS["medio"].chunk_chars
@@ -230,13 +230,14 @@ def test_summarize_effort_changes_how_much_work_is_done(llm: Recorder, tmp_path:
     file = tmp_path / "grande.txt"
     file.write_text("Uma frase com fatos. " * 1500, encoding="utf-8")  # ~31 mil caracteres
     calls = {}
-    for effort in ("baixo", "medio", "alto"):
+    for effort in EFFORTS:
         recorder = Recorder()
         srv = Server(lambda r=recorder: JevClaud(store=":memory:", writer=CallableWriter(r)))
         payload(call(srv, "summarize_file", {"path": str(file), "effort": effort}))
         calls[effort] = len(recorder.calls)
         srv.close()
-    assert calls["baixo"] < calls["medio"] < calls["alto"]
+    assert calls["baixo"] < calls["medio"] < calls["alto"] < calls["extra"] < calls["max"]
+    assert calls["ultracode"] == calls["max"] + 1  # a passada de revisão
 
 
 def test_summarize_rejects_bad_effort_and_empty_file(server: Server, tmp_path: Path) -> None:
@@ -244,13 +245,20 @@ def test_summarize_rejects_bad_effort_and_empty_file(server: Server, tmp_path: P
     file.write_text("  \n", encoding="utf-8")
     assert call(server, "summarize_file", {"path": str(file)})["isError"] is True
     file.write_text("texto", encoding="utf-8")
-    result = call(server, "summarize_file", {"path": str(file), "effort": "máximo"})
-    assert result["isError"] is True and "baixo, medio ou alto" in result["content"][0]["text"]
+    result = call(server, "summarize_file", {"path": str(file), "effort": "turbo"})
+    assert result["isError"] is True and "ultracode" in result["content"][0]["text"]
 
 
 def test_effort_is_in_tool_schemas() -> None:
     schemas = {tool["name"]: tool["inputSchema"]["properties"] for tool in TOOLS}
-    assert schemas["summarize_file"]["effort"]["enum"] == ["baixo", "medio", "alto"]
+    assert schemas["summarize_file"]["effort"]["enum"] == [
+        "baixo",
+        "medio",
+        "alto",
+        "extra",
+        "max",
+        "ultracode",
+    ]
     assert "effort" in schemas["write"]
 
 

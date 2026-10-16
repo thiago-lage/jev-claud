@@ -432,8 +432,9 @@ class JevClaud:
     def summarize(self, text: str, *, focus: str | None = None, effort: str | None = None) -> str:
         """Resume um texto grande com a LLM local, quebrado em blocos conforme o `effort`.
 
-        `baixo`: blocos grandes, tudo no modelo rápido. `medio` (padrão): blocos no rápido,
-        junção no padrão. `alto`: blocos menores com mais sobreposição, junção no forte.
+        Os níveis seguem o seletor do app do Claude: `baixo`, `medio` (padrão), `alto`,
+        `extra`, `max` e `ultracode`. Quanto mais alto, menores os blocos e mais forte o modelo
+        (tabela em `jev_claud.effort`); o `ultracode` ainda revisa o resumo contra as fontes.
         A junção é hierárquica (nunca manda à LLM mais que um bloco por vez) e uma parte que
         falha não derruba o resumo: ela fica de fora e o resumo avisa.
         """
@@ -443,13 +444,14 @@ class JevClaud:
         if not chunks:
             raise ValueError("Nada para resumir: o texto está vazio.")
         if len(chunks) == 1:
-            return self.write(
+            single = self.write(
                 focus,
                 context=chunks[0],
                 system=SUMMARY_SYSTEM,
                 max_tokens=plan.final_tokens,
                 tier=plan.final_tier,
             )
+            return self._verify(single, chunks[0], plan) if plan.verify else single
         partials: list[str] = []
         failed = 0
         last_error: WriterError | None = None
@@ -477,6 +479,8 @@ class JevClaud:
                 break  # cada parcial já ocupa um bloco: juntar de novo não encolhe nada
             partials = [self._merge(group, focus, plan, final=False) for group in groups]
         summary = self._merge(partials, focus, plan, final=True)
+        if plan.verify:
+            summary = self._verify(summary, _join_parts(partials), plan)
         if failed:
             summary += (
                 f"\n\n(Aviso: {failed} de {len(chunks)} partes falharam na LLM local "
@@ -484,8 +488,22 @@ class JevClaud:
             )
         return summary
 
+    def _verify(self, summary: str, sources: str, plan: EffortPlan) -> str:
+        """Passada de revisão (`ultracode`): tira do resumo o que as fontes não apoiam."""
+        prompt = (
+            "Revise o RESUMO comparando com as FONTES. Corrija ou remova toda afirmação que não "
+            "estiver apoiada nas fontes e não acrescente nada novo. Devolva só o resumo revisado."
+        )
+        return self.write(
+            prompt,
+            context=f"RESUMO:\n{summary}\n\nFONTES:\n{sources}",
+            system=SUMMARY_SYSTEM,
+            max_tokens=plan.final_tokens,
+            tier=plan.final_tier,
+        )
+
     def _merge(self, parts: list[str], focus: str, plan: EffortPlan, *, final: bool) -> str:
-        joined = "\n\n".join(f"[Parte {n}]\n{part}" for n, part in enumerate(parts, 1))
+        joined = _join_parts(parts)
         if final:
             prompt = f"Junte estes resumos parciais em um resumo final. {focus}"
             return self.write(
@@ -624,6 +642,10 @@ class JevClaud:
 # ----------------------------------------------------------------------
 # Auxiliares
 # ----------------------------------------------------------------------
+
+
+def _join_parts(parts: Sequence[str]) -> str:
+    return "\n\n".join(f"[Parte {n}]\n{part}" for n, part in enumerate(parts, 1))
 
 
 def _cache_key(model: str, state: Any, wire: Mapping[str, Any]) -> str:
