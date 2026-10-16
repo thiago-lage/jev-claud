@@ -138,7 +138,7 @@ def test_windows_python_path_uses_forward_slashes() -> None:
 
 
 def test_powershell_uses_call_operator() -> None:
-    wrapped = wrap_command("pytest -x", python="C:\\Users\\Ana O'Lima\\py.exe", shell="PowerShell")
+    wrapped = wrap_command("pytest -x", python="C:/Users/Ana O'Lima/py.exe", shell="PowerShell")
     assert wrapped == "& 'C:/Users/Ana O''Lima/py.exe' -m jev_claud run -- pytest -x"
 
 
