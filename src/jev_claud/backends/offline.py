@@ -14,6 +14,7 @@ import math
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from jev_claud.backends.base import RawAnswer, RawResult
@@ -22,6 +23,7 @@ from jev_claud.errors import BackendError
 from jev_claud.questions import Choice, Noul, Question, Score
 
 MODEL_NAME = "offline-lexical-1"
+_NEGATION = re.compile(r"\b(?:não|nao|nem|nunca|not|never|neither|no)\b|n['’]t\b", re.IGNORECASE)
 
 _WORD = re.compile(r"[a-z0-9]+")
 _PATH_REF = re.compile(r"`([^`]+)`")
@@ -48,6 +50,15 @@ class OfflineBackend:
     ) -> RawResult:
         state_features = features(flatten(state))
         answers = {name: self._answer(state, state_features, q) for name, q in questions.items()}
+        # Coincidência lexical não entende o escopo de uma negação. Abster-se evita
+        # aceitar com alta confiança "não é cobrança, é um bug" na cascata.
+        if _NEGATION.search(flatten(state)):
+            answers = {
+                name: replace(answer, value=0.5, confidence=None)
+                if answer.kind == "noul"
+                else replace(answer, confidence=0.0)
+                for name, answer in answers.items()
+            }
         return RawResult(answers=answers, model=MODEL_NAME, input_tokens=0)
 
     def _answer(self, state: Any, state_features: set[str], question: Question) -> RawAnswer:

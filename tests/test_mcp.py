@@ -78,7 +78,17 @@ def test_tools_list_has_schemas(server: Server) -> None:
     response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert response is not None
     names = [tool["name"] for tool in response["result"]["tools"]]
-    assert names == ["decide", "classify", "rank", "summarize_file", "write", "status"]
+    assert names == [
+        "decide",
+        "classify",
+        "rank",
+        "summarize_file",
+        "write",
+        "status",
+        "diagnose_log",
+        "search_file",
+        "read_evidence",
+    ]
     assert all(tool["inputSchema"]["type"] == "object" and tool["description"] for tool in TOOLS)
 
 
@@ -168,8 +178,8 @@ def test_classify_file_returns_counts_not_data(server: Server, tmp_path: Path) -
         )
     )
     assert result["total"] == 60
-    # "Bom dia" não tem evidência: empate uniforme, cai no primeiro rótulo com confiança 0.
-    assert result["counts"] == {"financeiro": 35, "suporte": 25}
+    # Sem evidência, o palpite não entra nas contagens como uma classificação aceita.
+    assert result["counts"] == {"financeiro": 30, "suporte": 25}
     assert result["uncertain_total"] == 5 and result["uncertain"][0]["text"] == "Bom dia"
     assert result["items"] is None  # mais de 50 itens: só o resumo volta para o contexto
 
@@ -212,7 +222,7 @@ def test_write_uses_local_llm(server: Server, llm: Recorder) -> None:
 def test_summarize_small_file_in_one_call(server: Server, llm: Recorder, tmp_path: Path) -> None:
     file = tmp_path / "nota.txt"
     file.write_text("Reunião: decidimos lançar na sexta.", encoding="utf-8")
-    assert payload(call(server, "summarize_file", {"path": str(file)})) == "resposta 1"
+    assert payload(call(server, "summarize_file", {"path": str(file)}))["summary"] == "resposta 1"
     assert len(llm.calls) == 1 and "decidimos lançar" in llm.calls[0][0]
 
 
@@ -222,7 +232,7 @@ def test_summarize_large_file_map_reduce(server: Server, llm: Recorder, tmp_path
     summary = payload(call(server, "summarize_file", {"path": str(file), "instructions": "Só decisões."}))
     parts = len(llm.calls) - 1
     assert parts >= 3
-    assert summary == f"resposta {parts + 1}"
+    assert summary["summary"] == f"resposta {parts + 1}"
     assert "Junte estes resumos parciais" in llm.calls[-1][0] and "Só decisões." in llm.calls[-1][0]
 
 

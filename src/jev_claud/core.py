@@ -191,7 +191,9 @@ class JevClaud:
         model_name = self.resolve_model(model)
         ttl = self._cache_ttl(model_name)
         use_cache = cache and ttl != 0
-        key = _cache_key(model_name, state, wire)
+        # Uma mudança na política de triagem não pode reutilizar aceites antigos.
+        cache_model = f"{model_name}:triage-v2:{strategy or self.strategy}:{self.cascade_accept}:{escalate}"
+        key = _cache_key(cache_model, state, wire)
         if use_cache:
             hit = self.store.get(key)
             if hit is not None:
@@ -598,7 +600,9 @@ class JevClaud:
             return None, []
         raw = self.offline.evaluate(state, textual, model=None)
         built = _build(raw, textual, policy, source="offline")
-        accepted = [name for name, d in built.items() if d.confidence >= self.cascade_accept]
+        accepted = [
+            name for name, d in built.items() if d.confidence > 0 and d.confidence >= self.cascade_accept
+        ]
         return raw, accepted
 
     def _offline(

@@ -3,9 +3,13 @@
 O Jevin é o mascote do [jev-claud](https://github.com/thiago-lage/jev-claud): um robozinho em
 pixel art com a antena em forquilha, a bifurcação que o código toma em cada decisão.
 
-Este plugin ensina o Claude Code a poupar contexto e custo **sem mudar a qualidade da
-entrega**: o Claude continua implementando direto (edita arquivos, roda testes), só que gasta
-menos tokens explorando e escolhe a ferramenta certa quando o código usa IA.
+Este plugin orienta o Claude Code a investigar com evidências e reduzir contexto.
+O Claude planeja, lê as fontes, edita e valida; jev-claud prepara dados e sinais de falha.
+Resumos locais precisam de conferência e não garantem a mesma qualidade do original.
+
+Na versão em desenvolvimento, a skill inclui o fluxo teste → `diagnose_log` →
+`read_evidence` → correção pelo agente → nova execução. Exige a versão correspondente
+do servidor MCP. Só instalar a skill não adiciona essas ferramentas.
 
 ## O que vem no plugin
 

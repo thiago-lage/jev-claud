@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/jev-claud?label=pypi&cacheSeconds=3600)](https://pypi.org/project/jev-claud/)
 [![CI](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml/badge.svg)](https://github.com/thiago-lage/jev-claud/actions/workflows/ci.yml)
 
-**Faz o Claude gastar menos tokens, sozinho, em toda conversa. Custo zero.**
+**Prepara evidências e reduz ruído para o agente principal. Custo zero por padrão.**
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/terminal.png" alt="Terminal do jev-claud: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
@@ -13,10 +13,11 @@
 
 O Claude paga, em tokens e em espaço de contexto, por tudo o que lê. Muito disso é ruído:
 centenas de linhas de testes passando, arquivos de dados inteiros lidos só para contar ou
-filtrar. O jev-claud corta esse ruído **antes** de ele chegar ao Claude. A qualidade não muda:
-o Claude continua lendo e editando o seu código normalmente.
+filtrar. O jev-claud corta esse ruído **antes** de ele chegar ao Claude e aponta as fontes
+para conferência. O agente principal continua planejando, lendo, editando e validando.
 
-Depois de instalado, ele funciona **sozinho em toda conversa nova**. Você não chama nada.
+No Claude Code, o hook compacta comandos compatíveis automaticamente. As ferramentas MCP
+ficam disponíveis para o agente escolher conforme a tarefa; a skill orienta essa escolha.
 
 | O que o jev-claud faz | Quando entra | Quanto economiza |
 | --- | --- | --- |
@@ -135,8 +136,8 @@ menores os blocos e mais forte o modelo. O Claude escolhe o nível em cada chama
 | Ultracode | `ultracode` | como `max` | forte | forte | sim |
 
 A **revisão** do `ultracode` é uma passada a mais do modelo forte: ele confere o resumo final
-contra os resumos parciais e remove o que não estiver apoiado neles. É o nível mais lento e o
-mais fiel. Os nomes em inglês também valem (`low`, `medium`, `high`, `xhigh`), assim como
+contra os resumos parciais. Essa revisão não garante fidelidade ao documento original.
+Os nomes em inglês também valem (`low`, `medium`, `high`, `xhigh`), assim como
 `médio`, `máx` e `máximo`.
 
 Cada camada usa um modelo do Ollama que você escolhe:
@@ -299,10 +300,55 @@ Nas próximas sessões o Claude ganha estas ferramentas, que rodam **fora do con
 | --- | --- | --- | --- |
 | `classify` | caminho de um arquivo + rótulos | contagens + itens incertos | Jev / offline |
 | `rank` | caminho + consulta | só os top_k | Jev / offline |
-| `summarize_file` | caminho + foco | um resumo | Ollama (grátis) |
+| `summarize_file` | caminho + foco | resumo não verificado, cobertura, modelos e cache | Ollama por padrão |
 | `decide` | texto/JSON + perguntas | valores tipados + confiança | Jev / offline |
 | `write` | instrução curta | rascunho | Ollama (grátis) |
-| `status` | — | o que está ativo e o gasto do mês | — |
+| `diagnose_log` | caminho do log + código de saída observado | sinais de falha agrupados e linhas originais | Código puro |
+| `search_file` | caminho + texto literal | ocorrências com contexto e linhas | Código puro |
+| `read_evidence` | caminho + linhas + fingerprint opcional | trecho original; rejeita evidência desatualizada | Código puro |
+| `status` | — | backends, modelos, cache e últimas 10 chamadas desta sessão | — |
+
+### Fluxo de diagnóstico para o agente
+
+O agente executa os testes. O hook do Claude Code preserva o log completo de saídas longas
+e também de falhas curtas. O agente chama `diagnose_log` com esse caminho e o `exit_code`
+observado, confere os trechos e lê o código relevante antes de corrigir e executar novamente.
+Sem MCP, o mesmo diagnóstico está disponível no terminal:
+
+```console
+jev-claud diagnose caminho/do/teste.log --exit-code 1 --json
+```
+
+O diagnóstico identifica sinais conhecidos (pytest, falhas Jest/Vitest, Go, compiladores,
+exceções e npm); não interpreta todos os formatos nem infere causa raiz. Mensagens iguais
+são agrupadas, sem confundir ocorrências com quantidade de testes. `needs_agent_review`
+devolve a investigação ao agente principal. Sem código de saída, não declara sucesso.
+
+As ferramentas de evidências leem no máximo `max_chars` (padrão 400 mil; máximo 2 milhões).
+`source.coverage`, `source.truncated`, linhas cortadas e grupos omitidos informam os limites.
+`read_evidence` permite ampliar até 100 linhas dentro da região lida; aumente `max_chars`
+ou leia o original com as ferramentas do agente se a região necessária estiver além dela.
+Use o `fingerprint` retornado para detectar alterações entre diagnóstico e conferência.
+
+### Contratos de confiabilidade do MCP
+
+- `decide`: confiança baixa devolve `value=null`, `abstained=true` e um `candidate`
+  apenas informativo. Negação reconhecida na entrada força incerteza no backend lexical.
+  Isso não torna a heurística um modelo semântico; outros erros ainda são possíveis.
+- `classify`: `counts` exclui abstenções; os pendentes aparecem em `uncertain_total`.
+  Arquivos de classificação/ranking têm um item por linha, limite de 500 itens e não são
+  interpretados como CSV completo. Entradas excessivas são recusadas antes de processar.
+- `summarize_file`: retorna um objeto com `summary`, `source`, `cached` e
+  `verification=unverified`. Confira fatos no original com `search_file`/`read_evidence`.
+  Cache em memória de até 16 resumos por sessão, sensível a conteúdo, arquivo, foco,
+  esforço e modelos. Reiniciar o servidor limpa esse cache; não é processamento incremental.
+- A API Python continua retornando objetos `Decision` com seus candidatos e faixas de
+  confiança. Quem a consome deve tratar `uncertain` e definir o caminho de abstenção.
+
+Esta entrega acrescenta diagnóstico e evidências. Monitor contínuo no terminal,
+processamento incremental, cancelamento de inferência e adaptador específico para
+Antigravity ainda não estão implementados. Ter MCP configurado não comprova que um agente
+está conectado; a atividade mostrada em `status` pertence somente ao servidor consultado.
 
 **Onde a economia é real:** tudo que o Claude lê ou escreve custa tokens. Se você pede
 "classifique os 2.000 tickets de `tickets.csv`", ler o arquivo custaria dezenas de milhares de

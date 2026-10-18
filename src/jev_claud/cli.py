@@ -85,6 +85,13 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("command", nargs=argparse.REMAINDER, help="o comando, depois de --")
     run.set_defaults(standalone=_run)
 
+    diagnose = sub.add_parser("diagnose", help="organiza evidências de um log para o agente, sem LLM")
+    diagnose.add_argument("path")
+    diagnose.add_argument("--exit-code", type=int)
+    diagnose.add_argument("--max-chars", type=int, default=400_000)
+    diagnose.add_argument("--json", action="store_true")
+    diagnose.set_defaults(standalone=_diagnose)
+
     hook = sub.add_parser(
         "hook", help="hooks do Claude Code gravados pelo setup (lê o evento JSON da entrada)"
     )
@@ -174,6 +181,8 @@ def _doctor(r: JevClaud, args: argparse.Namespace) -> int:
     if writer is not None:
         rapido, padrao, forte = r.tier_models().values()
         print(f"  esforço      : rápido {rapido} | padrão {padrao} | forte {forte}")
+        if rapido == padrao == forte:
+            print("  atenção      : todos os esforços usam o mesmo modelo; mais esforço aumenta o trabalho.")
     if r.jev is not None:
         print(f"  estratégia   : {r.strategy}  (offline aceito com confiança >= {r.cascade_accept:.2f})")
     print(f"\nCache: {status['cache']['entries']} decisões em {status['cache']['path']}")
@@ -253,6 +262,7 @@ COMMANDS = (
     ("setup", "instala e configura tudo (Ollama, Claude Code, plugin)"),
     ("doctor", "o que está ativo, orçamento e cache"),
     ("spend", "gastos e economia do mês"),
+    ("diagnose arquivo.log", "evidências de falhas para o agente investigar e corrigir"),
     ('ask "texto" --noul "pergunta?"', "decisão tipada pela linha de comando"),
     ('write "instrução"', "texto com a LLM local"),
     ("update", "atualiza o jev-claud, o SDK do Jev, o plugin e a regra"),
@@ -265,6 +275,7 @@ def _splash() -> None:
 
     ui = UI()
     ui.banner(__version__, title="jev-claud", footer=savings_footer())
+    ui.line("  Apoio ao agente: ele planeja, lê evidências, edita e valida; o jev-claud reduz o ruído.")
     width = max(len(name) for name, _ in COMMANDS)
     for name, description in COMMANDS:
         ui.line(f"  {ui.paint(f'jev-claud {name:<{width}}', '1')}  {ui.paint(description, '2')}")
@@ -346,6 +357,31 @@ def _rule(args: argparse.Namespace) -> int:
     _, out = _utf8_streams()
     print(CLAUDE_RULE, end="", file=out)
     return 0
+
+
+def _diagnose(args: argparse.Namespace) -> int:
+    from jev_claud.evidence import diagnose_log
+
+    try:
+        report = diagnose_log(args.path, exit_code=args.exit_code, max_chars=args.max_chars)
+    except (ValueError, OSError) as error:
+        print(f"erro: {error}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        source = report["source"]
+        print(f"Diagnóstico: {source['path']}")
+        print(f"Estado: {report['status']} | saída: {report['exit_code']} | cobertura: {source['coverage']}")
+        print("Sinais observados; a causa raiz deve ser investigada pelo agente.")
+        for group in report["groups"]:
+            print(f"\n[{group['kind']}] {group['occurrences']} ocorrência(s): {group['message']}")
+            for line in group["evidence"]["lines"]:
+                print(f"  {line['line']}: {line['text']}" + (" … [cortada]" if line["truncated"] else ""))
+        if report["omitted_groups"]:
+            print(f"\n{report['omitted_groups']} grupos omitidos; confira o log completo.")
+        print(f"\n{report['next_action']}")
+    return 0  # sucesso da leitura; o resultado do teste está em exit_code
 
 
 def _hook(args: argparse.Namespace) -> int:

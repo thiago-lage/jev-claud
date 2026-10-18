@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, TextIO
@@ -118,7 +119,7 @@ def save_log(text: str, directory: Path | None = None) -> Path | None:
     directory = directory or logs_dir()
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        path = directory / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}.log"
+        path = directory / f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{uuid.uuid4().hex[:8]}.log"
         path.write_text(text, encoding="utf-8")
         for old in sorted(directory.glob("*.log"))[:-KEEP_LOGS]:
             old.unlink(missing_ok=True)
@@ -138,10 +139,15 @@ def write_compacted(text: str, stdout: TextIO, *, log_dir: Path | None = None) -
         stdout.write(text)
         return
     path = save_log(text, log_dir)
+    if path is None:
+        # Não destruir a única cópia da evidência quando o disco falha.
+        stdout.write(text)
+        return
     savings.record(savings.COMPACT, len(text) - len(compacted))
     before, after = len(text.splitlines()), len(compacted.splitlines())
     where = f"; completa em {path}" if path else ""
     stdout.write(f"{compacted}\n[jev-claud] saída compactada: {before} -> {after} linhas{where}\n")
+    stdout.write("[jev-claud] Investigue com diagnose_log(path=<log acima>, exit_code=<saída observada>).\n")
 
 
 def _parse(words: list[str]) -> tuple[dict[str, str], list[str]] | None:
@@ -224,7 +230,15 @@ def run_command(
         return 127
     except KeyboardInterrupt:
         return 130
-    write_compacted(done.stdout.decode("utf-8", errors="replace"), stdout, log_dir=log_dir)
+    output = done.stdout.decode("utf-8", errors="replace")
+    if done.returncode != 0 and len(output.splitlines()) <= MIN_LINES:
+        stdout.write(output)
+        path = save_log(output, log_dir)
+        if path is not None:
+            stdout.write(f"\n[jev-claud] comando falhou: exit_code={done.returncode}; completa em {path}\n")
+            stdout.write("[jev-claud] Use diagnose_log para organizar as evidências dessa falha.\n")
+    else:
+        write_compacted(output, stdout, log_dir=log_dir)
     return done.returncode
 
 

@@ -7,14 +7,34 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ### Adicionado
 
+- Diagnóstico determinístico de logs (`diagnose_log` no MCP, `jev-claud diagnose` na CLI),
+  busca literal (`search_file`) e leitura de evidências (`read_evidence`), com linhas,
+  cobertura, avisos de corte e detecção de arquivo alterado.
+- Cache em memória de 16 resumos por sessão MCP e últimas 10 chamadas com duração e falhas.
+- Skill Jevin e regra global versão 6: agente principal planeja, investiga, edita e valida;
+  as ferramentas fornecem evidências e sinalizam pendências.
 - **`jev-claud status` como apelido do `doctor`.** Mesmo nome da ferramenta MCP `status`; antes o
   comando falhava com "invalid choice".
 
 ### Corrigido
 
+- Negação reconhecida deixa o backend lexical incerto; cache de decisões inclui versão de
+  triagem, estratégia, limiar e modo de escalonamento para não reutilizar aceites incompatíveis.
+- Logs de falhas curtas são preservados; arquivos de execuções próximas não se sobrescrevem.
+  Se salvar o log falhar, a compactação devolve a saída integral.
+- Arquivos de decisão/classificação/ranking grandes demais são recusados em vez de cortados silenciosamente.
 - **O `jev-claud update` mostra cada comando antes da etapa dele.** As linhas `$ <comando>` (pip do
   `typesafe-sdk`, pip do `jev-claud[jev]` e `refresh`) ficavam no buffer e saíam todas no fim,
   depois da saída do pip e do refresh. Agora cada uma é descarregada antes de o subprocesso rodar.
+
+### Alterado
+
+- **Contrato MCP:** `summarize_file` devolve objeto com `summary`, cobertura, cache e
+  `verification=unverified`; consumidores que esperavam texto devem ler `summary`.
+  `decide` devolve `value=null` para abstenções, preservando `candidate`; `classify.counts`
+  exclui abstenções. A API Python `Decision` continua compatível.
+- `doctor` avisa quando rápido/padrão/forte usam o mesmo modelo. `ultracode` é descrito como
+  revisão auxiliar, sem promessa de fidelidade certificada.
 
 ## [0.10.2] - 2026-10-16
 

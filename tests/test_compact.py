@@ -256,6 +256,17 @@ def test_run_keeps_exit_code_env_and_compacts(tmp_path: Path) -> None:
     assert "1 failed, 299 passed" in done.stdout
     assert "[jev-claud] saída compactada:" in done.stdout
     assert len(done.stdout.splitlines()) < 150
+    # O agente consegue conferir o diagnóstico no mesmo log preservado pelo hook.
+    from jev_claud.evidence import diagnose_log, read_evidence
+
+    (saved,) = (tmp_path / "home" / "logs").glob("*.log")
+    report = diagnose_log(str(saved), exit_code=done.returncode)
+    assert report["needs_agent_review"] and "error_signals" in report["reasons"]
+    found = next(g for g in report["groups"] if "quebrou no 150" in g["message"])
+    expanded = read_evidence(
+        str(saved), start_line=found["evidence"]["start_line"], fingerprint=report["source"]["fingerprint"]
+    )
+    assert any("quebrou no 150" in line["text"] for line in expanded["evidence"]["lines"])
 
 
 def test_cli_hook_end_to_end(tmp_path: Path) -> None:

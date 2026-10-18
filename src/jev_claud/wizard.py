@@ -59,7 +59,7 @@ OLD_MARKETPLACE = "jev-claude"
 OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
-RULE_VERSION = 5
+RULE_VERSION = 6
 CLAUDE_RULE = f"""{RULE_START}
 <!-- versão {RULE_VERSION}: o `jev-claud setup` e o `jev-claud update` substituem este bloco inteiro -->
 ## Como trabalhar
@@ -67,7 +67,7 @@ CLAUDE_RULE = f"""{RULE_START}
 - Pedido de mudança em código: **implemente direto**. Edite os arquivos, rode os testes e
   mostre o resultado. Não devolva o código no chat para a pessoa colar, a não ser que ela peça.
 - Nunca delegue escrita ou edição de código ao Ollama/Jev: a qualidade da entrega é sua.
-  O Ollama e o Jev entram em todo o resto que poupa contexto (ver abaixo).
+  O agente principal planeja, interpreta evidências, edita e valida.
 
 ## Quando o código que você escreve usa IA: Jev vs. LLM
 
@@ -80,16 +80,24 @@ CLAUDE_RULE = f"""{RULE_START}
 - Ao integrar, leia https://docs.typesafe.ai/llms.txt (no Claude Code, use também a skill
   `typesafe:typesafe-ai`).
 
-## Poupar contexto com o Ollama local (grátis)
+## Evidências e contexto para o agente
+
+- Falha de teste/build: use `diagnose_log` com o caminho do log completo e o `exit_code`
+  observado. Ele organiza sinais, não determina a causa raiz. Leia o código e corrija você.
+- `search_file` busca texto literal; `read_evidence` amplia linhas. Passe `fingerprint` ao
+  conferir um diagnóstico anterior. Confira `source.truncated` e grupos omitidos.
+- `needs_agent_review` e `abstained` devolvem a investigação ao agente principal.
+  Não trate `candidate` como decisão. Confiança offline é lexical, não probabilidade de acerto.
 
 - Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
   MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
-- O Ollama é o motor grátis do `summarize_file` e do `write`: use-o em todo texto longo que não
-  seja código que você vai editar (logs, relatórios, transcrições, documentação de terceiros,
-  rascunhos de prosa). Leia o original só no trecho que o resumo apontar.
+- O Ollama é o motor local do `summarize_file` e do `write`: use-o quando o volume justificar.
+  O resumo retorna `summary`, cobertura e `verification=unverified`. Confira afirmações
+  importantes no original com `search_file`/`read_evidence`; prefira diagnóstico determinístico para logs.
 - Passe `effort`, com os mesmos níveis do seletor do Claude: `baixo` (triagem), `medio` (padrão),
   `alto` ou `extra` (os detalhes importam), `max` (o melhor que o local consegue) e `ultracode`
-  (`max` mais uma revisão contra as fontes; use antes de afirmar algo crítico).
+  (`max` mais revisão, contra parciais quando há vários blocos; não garante fidelidade).
+  Confira em `status` os modelos reais: os esforços podem usar o mesmo modelo.
 - Na sessão em nuvem as ferramentas MCP não existem: leia com `offset`/`limit`.
 - Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
 - Saída de teste ou build com o rodapé `[jev-claud] saída compactada`: a saída completa está no

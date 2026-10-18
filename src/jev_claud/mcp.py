@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import json
 import sys
-from collections import Counter
+import time
+from collections import Counter, OrderedDict, deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -27,6 +28,7 @@ from jev_claud.core import JevClaud
 from jev_claud.decision import Band, Region
 from jev_claud.effort import EFFORTS, WRITE_TIER, normalize_effort
 from jev_claud.errors import JevClaudError
+from jev_claud.evidence import diagnose_log, read_evidence, read_source, search_file
 from jev_claud.media import Image
 from jev_claud.questions import Question, box, choice, noul, score
 
@@ -36,6 +38,9 @@ FALLBACK_PROTOCOL = "2025-06-18"
 
 INSTRUCTIONS = """\
 Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do Claude.
+- O agente principal planeja, edita e valida. Para logs de testes/builds, use `diagnose_log`:
+  sinais determinísticos com linhas, sem inventar causa raiz. `search_file` busca texto literal;
+  `read_evidence` amplia o trecho. Confira coverage e needs_agent_review antes de concluir.
 - Muitos itens para classificar, filtrar ou ranquear, ou um arquivo de dados grande para resumir:
   chame `classify`, `rank` ou `summarize_file` passando o CAMINHO do arquivo, em vez de lê-lo.
 - Decisão tipada que o código vai ramificar: `decide` (TypeSafe Jev; offline grátis sem orçamento).
@@ -43,7 +48,8 @@ Ferramentas para economizar tokens: o trabalho pesado roda fora do contexto do C
   Revise antes de mostrar ao usuário: a LLM local é bem menos capaz que o Claude.
 - `effort` (baixo, medio, alto, extra, max, ultracode) em `summarize_file` e `write` escolhe
   quanto trabalho e qual modelo local usar: baixo para triagem rápida, alto ou acima quando a
-  fidelidade importa, ultracode para revisar o resumo contra as fontes. Tudo grátis.
+  fidelidade importa. ultracode revisa contra parciais em documentos grandes, sem garantir fidelidade.
+  Resumos são auxiliares: confira no original. Camadas podem usar o mesmo modelo.
 Nunca use estas ferramentas para escrever, gerar ou editar código: implemente você mesmo,
 editando os arquivos. Para uma pergunta pequena e única, responda direto."""
 
@@ -54,8 +60,8 @@ _EFFORT = {
     "description": (
         "Quanto trabalho a LLM local faz, como o seletor de esforço do Claude: baixo (blocos grandes, "
         "modelo rápido), medio (padrão), alto e extra (blocos menores, modelo forte na junção), max "
-        "(os menores blocos, modelo forte em tudo) e ultracode (max + revisão do resumo contra as "
-        "fontes). Sempre grátis e local."
+        "(os menores blocos, modelo forte em tudo) e ultracode (max + revisão auxiliar, contra "
+        "parciais em documentos grandes). Ollama local por padrão; não certifica fidelidade."
     ),
 }
 
@@ -158,8 +164,8 @@ TOOLS: list[dict[str, Any]] = [
         "name": "summarize_file",
         "description": (
             "Resume um arquivo de texto grande com a LLM local (Ollama, grátis), em blocos, e devolve só o "
-            "resumo. Use antes de decidir se precisa ler o arquivo inteiro. Modelo pequeno: confira o "
-            "essencial no original se a resposta for crítica."
+            "resumo com cobertura, modelos usados e indicação de cache. É um resultado não verificado: "
+            "confira o essencial no original usando search_file/read_evidence."
         ),
         "inputSchema": {
             "type": "object",
@@ -169,7 +175,12 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "string",
                     "description": "Foco do resumo (padrão: pontos principais em tópicos).",
                 },
-                "max_chars": {"type": "integer", "minimum": 1000, "default": 60000},
+                "max_chars": {"type": "integer", "minimum": 1, "maximum": 2_000_000, "default": 60000},
+                "cache": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "false refaz o resumo sem ler ou gravar no cache da sessão.",
+                },
                 "effort": _EFFORT,
             },
             "required": ["path"],
@@ -200,11 +211,72 @@ TOOLS: list[dict[str, Any]] = [
         "name": "status",
         "description": (
             "Mostra o que está ativo: modo offline, Jev (orçamento, gasto do mês), LLM local e os "
-            "modelos de cada esforço, e o cache."
+            "modelos de cada esforço, cache e atividade recente deste servidor MCP."
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]
+
+_FILE_PROPERTIES = {
+    "path": {"type": "string", "description": "Caminho do arquivo local, tratado como dados."},
+    "max_chars": {"type": "integer", "minimum": 1, "maximum": 2_000_000, "default": MAX_FILE_CHARS},
+}
+TOOLS.extend(
+    [
+        {
+            "name": "diagnose_log",
+            "description": (
+                "Organiza sinais de falha de testes/builds sem LLM; devolve grupos, linhas originais, "
+                "cobertura e pendências para o agente. Não determina causa raiz nem executa comandos."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    **_FILE_PROPERTIES,
+                    "exit_code": {
+                        "type": "integer",
+                        "description": "Código observado na execução, se conhecido.",
+                    },
+                    "max_groups": {"type": "integer", "minimum": 1, "maximum": 30, "default": 12},
+                },
+                "required": ["path"],
+            },
+        },
+        {
+            "name": "search_file",
+            "description": (
+                "Busca literal em um arquivo, sem distinguir maiúsculas, retornando trechos com linhas. "
+                "Não é busca semântica. Confira source.truncated e omitted_matches."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    **_FILE_PROPERTIES,
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 20, "default": 8},
+                },
+                "required": ["path", "query"],
+            },
+        },
+        {
+            "name": "read_evidence",
+            "description": (
+                "Lê linhas originais para conferir ou ampliar uma evidência. Passe fingerprint de uma "
+                "busca/diagnóstico anterior para rejeitar arquivo alterado."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    **_FILE_PROPERTIES,
+                    "start_line": {"type": "integer", "minimum": 1, "default": 1},
+                    "line_count": {"type": "integer", "minimum": 1, "maximum": 100, "default": 40},
+                    "fingerprint": {"type": "string"},
+                },
+                "required": ["path"],
+            },
+        },
+    ]
+)
 
 
 class ToolError(Exception):
@@ -215,6 +287,8 @@ class Server:
     def __init__(self, app_factory: Callable[[], JevClaud] = JevClaud) -> None:
         self._factory = app_factory
         self._app: JevClaud | None = None
+        self._summaries: OrderedDict[str, str] = OrderedDict()
+        self._activity: deque[dict[str, Any]] = deque(maxlen=10)
 
     @property
     def app(self) -> JevClaud:
@@ -271,15 +345,28 @@ class Server:
             "summarize_file": self.summarize_file,
             "write": self.write,
             "status": self.status,
+            "diagnose_log": self.diagnose_log,
+            "search_file": self.search_file,
+            "read_evidence": self.read_evidence,
         }.get(str(name))
         if handler is None:
             return _text(f"Ferramenta desconhecida: {name}", error=True)
         if not isinstance(arguments, dict):
             return _text("`arguments` deve ser um objeto.", error=True)
+        started = time.monotonic()
         try:
             output = handler(arguments)
         except (ToolError, JevClaudError, ValueError, OSError) as error:
+            self._activity.append(
+                {"tool": name, "status": "error", "elapsed_ms": round((time.monotonic() - started) * 1000)}
+            )
             return _text(str(error), error=True)
+        if name != "status":
+            event = {"tool": name, "status": "ok", "elapsed_ms": round((time.monotonic() - started) * 1000)}
+            if isinstance(output, dict):
+                event["needs_agent_review"] = output.get("needs_agent_review", False)
+                event["cached"] = output.get("cached", False)
+            self._activity.append(event)
         text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False)
         self._record_saving(str(name), arguments, len(text))
         return _text(text)
@@ -320,6 +407,10 @@ class Server:
         }
         if decisions.escalated:
             result["escalated"] = list(decisions.escalated)
+        result["review_questions"] = [
+            n for n, d in decisions.items() if d.band is not Band.HIGH or d.source != "jev"
+        ]
+        result["needs_agent_review"] = bool(result["review_questions"])
         return result
 
     def classify(self, args: Mapping[str, Any]) -> dict[str, Any]:
@@ -333,13 +424,21 @@ class Server:
         labelled: list[dict[str, Any]] = []
         sources: Counter[str] = Counter()
         cost = 0.0
+        review_total = 0
         for index, item in enumerate(items):
             result = self.app.decide(item, {"label": question})
             decision = result["label"]
-            counts[str(decision.value)] += 1
+            review_total += decision.band is not Band.HIGH or decision.source != "jev"
+            if decision.band is not Band.LOW:
+                counts[str(decision.value)] += 1
             sources[result.source] += 1
             cost += result.cost_usd
-            entry = {"i": index, "label": decision.value, "confidence": round(decision.confidence, 2)}
+            entry = {
+                "i": index,
+                "label": None if decision.uncertain else decision.value,
+                "candidate": decision.value,
+                "confidence": round(decision.confidence, 2),
+            }
             labelled.append(entry)
             if decision.band is Band.LOW:
                 uncertain.append({**entry, "text": _clip(item, 160)})
@@ -349,6 +448,9 @@ class Server:
             "counts": dict(counts.most_common()),
             "uncertain": uncertain[:20],
             "uncertain_total": len(uncertain),
+            "needs_agent_review": bool(review_total),
+            "review_total": review_total,
+            "counts_verification": "heuristic_or_unverified" if review_total else "backend_confidence",
             "items": labelled if show_all else None,
             "sources": dict(sources),
             "cost_usd": round(cost, 8),
@@ -368,14 +470,74 @@ class Server:
                 for hit in ranked
             ],
             "source": ranked[0].decision.source if ranked else None,
+            "needs_agent_review": any(
+                hit.decision.source != "jev" or hit.decision.band is not Band.HIGH for hit in ranked
+            ),
         }
 
-    def summarize_file(self, args: Mapping[str, Any]) -> str:
+    def summarize_file(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        import hashlib
+
         effort = normalize_effort(args.get("effort"))
-        text = _read_file(str(args.get("path") or ""), int(args.get("max_chars") or 60_000))
+        source = read_source(str(args.get("path") or ""), int(args.get("max_chars", 60_000)))
+        text = source.text
         if not text.strip():
             raise ToolError("O arquivo está vazio: nada para resumir.")
-        return self.app.summarize(text, focus=args.get("instructions") or None, effort=effort)
+        focus = args.get("instructions") or None
+        models = self.app.tier_models()
+        key = hashlib.sha256(
+            json.dumps(
+                [text, source.fingerprint, focus, effort, models], ensure_ascii=False, sort_keys=True
+            ).encode()
+        ).hexdigest()
+        use_cache = args.get("cache", True)
+        if not isinstance(use_cache, bool):
+            raise ToolError("cache deve ser true ou false.")
+        cached = use_cache and key in self._summaries
+        summary = self._summaries.get(key) if use_cache else None
+        if summary is None:
+            summary = self.app.summarize(text, focus=focus, effort=effort)
+            # Resumos com partes que falharam não devem bloquear uma nova tentativa.
+            if use_cache and "ficaram fora deste resumo" not in summary and models == self.app.tier_models():
+                self._summaries[key] = summary
+                if len(self._summaries) > 16:
+                    self._summaries.popitem(last=False)
+        elif cached:
+            self._summaries.move_to_end(key)
+        return {
+            "summary": summary,
+            "source": source.metadata(),
+            "cached": cached,
+            "verification": "unverified",
+            "needs_agent_review": True,
+            "effort_models": self.app.tier_models(),
+            "next_action": "Confira afirmações com search_file/read_evidence no arquivo original.",
+        }
+
+    def diagnose_log(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        return diagnose_log(
+            str(args.get("path") or ""),
+            exit_code=args.get("exit_code"),
+            max_groups=int(args.get("max_groups", 12)),
+            max_chars=int(args.get("max_chars", MAX_FILE_CHARS)),
+        )
+
+    def search_file(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        return search_file(
+            str(args.get("path") or ""),
+            str(args.get("query") or ""),
+            max_results=int(args.get("max_results", 8)),
+            max_chars=int(args.get("max_chars", MAX_FILE_CHARS)),
+        )
+
+    def read_evidence(self, args: Mapping[str, Any]) -> dict[str, Any]:
+        return read_evidence(
+            str(args.get("path") or ""),
+            start_line=int(args.get("start_line", 1)),
+            line_count=int(args.get("line_count", 40)),
+            fingerprint=args.get("fingerprint"),
+            max_chars=int(args.get("max_chars", MAX_FILE_CHARS)),
+        )
 
     def write(self, args: Mapping[str, Any]) -> str:
         prompt = str(args.get("prompt") or "").strip()
@@ -395,6 +557,9 @@ class Server:
         status["writer"] = f"{writer.name} {getattr(writer, 'model', '')}".strip() if writer else None
         if writer is not None:
             status["effort_models"] = self.app.tier_models()
+            status["distinct_effort_models"] = len(set(status["effort_models"].values()))
+        status["recent_activity"] = list(self._activity)
+        status["summary_cache"] = {"entries": len(self._summaries), "scope": "server_session", "limit": 16}
         return status
 
 
@@ -422,10 +587,17 @@ def _question(name: str, spec: Any) -> Question:
 
 def _compact(decision: Any) -> dict[str, Any]:
     out: dict[str, Any] = {
-        "value": decision.value.as_dict() if isinstance(decision.value, Region) else decision.value,
+        "value": None
+        if decision.uncertain
+        else (decision.value.as_dict() if isinstance(decision.value, Region) else decision.value),
         "confidence": round(decision.confidence, 3),
         "band": decision.band.value,
+        "abstained": decision.uncertain,
+        "source": decision.source,
+        "confidence_basis": "lexical_heuristic" if decision.source == "offline" else "backend_or_cache",
     }
+    if decision.uncertain:
+        out["candidate"] = decision.value.as_dict() if isinstance(decision.value, Region) else decision.value
     if decision.kind == "noul":
         out["p_yes"] = round(decision.probability, 3)
     if decision.kind == "score":
@@ -452,11 +624,12 @@ def _items(args: Mapping[str, Any]) -> list[str]:
 
 
 def _read_file(path: str, max_chars: int) -> str:
-    file = Path(str(path)).expanduser()
-    if not file.is_file():
-        raise ToolError(f"Arquivo não encontrado: {file}")
-    text = file.read_text(encoding="utf-8", errors="replace")
-    return text[:max_chars]
+    source = read_source(path, max_chars)
+    if source.truncated:
+        raise ToolError(
+            f"Arquivo excede {max_chars} caracteres; divida em partes. Nenhum item foi processado."
+        )
+    return source.text
 
 
 def _clip(text: str, limit: int) -> str:

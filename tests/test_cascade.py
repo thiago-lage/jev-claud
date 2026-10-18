@@ -58,6 +58,24 @@ def test_everything_obvious_never_calls_jev(make_jev: Factory) -> None:
     assert r.store.spent() == (0.0, 0, 0)
 
 
+def test_negation_escalates_instead_of_accepting_lexical_confidence(make_jev: Factory) -> None:
+    client = FakeClient(answers_for(setor=choice_answer({"financeiro": 0.01, "suporte": 0.99})))
+    r = make_jev(client, strategy="cascade")
+    d = r.decide("Não é cobrança, nem fatura, nem pagamento, nem reembolso. É um bug.", {"setor": SETOR})
+    assert len(client.calls) == 1 and d["setor"].source == "jev" and d["setor"].value == "suporte"
+
+
+def test_direct_strategy_does_not_reuse_mixed_cache(make_jev: Factory) -> None:
+    client = FakeClient(
+        answers_for(urgente=noul_answer(0.9), setor=choice_answer({"financeiro": 0.01, "suporte": 0.99}))
+    )
+    r = make_jev(client, strategy="cascade")
+    questions = {"setor": SETOR, "urgente": URGENTE}
+    assert r.decide(OBVIO, questions).source == "mixed"
+    direct = r.decide(OBVIO, questions, strategy="jev")
+    assert len(client.calls) == 2 and direct["setor"].value == "suporte"
+
+
 def test_nothing_obvious_goes_entirely_to_jev(make_jev: Factory) -> None:
     client = FakeClient(
         answers_for(setor=choice_answer({"financeiro": 0.8, "suporte": 0.2}), urgente=noul_answer(0.1))
