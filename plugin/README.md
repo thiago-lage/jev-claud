@@ -17,8 +17,11 @@ do servidor MCP. Só instalar a skill não adiciona essas ferramentas.
 | --- | --- | --- |
 | Skill `jev` | Ensina quando usar decisões tipadas (TypeSafe Jev), texto de LLM ou código puro, quando vale processar um arquivo grande fora do contexto e como ler saídas compactadas. Só entra no contexto quando é relevante. | Claude Code, Cowork, chat |
 | Subagente `scout` | Explora o código em contexto separado, somente leitura, e devolve só a conclusão com `caminho:linha`. | Claude Code, Cowork |
+| Servidor MCP `jev-claud` | Dá ao Claude as ferramentas `classify`, `rank`, `summarize_file`, `decide`, `write` e as de diagnóstico, que processam arquivos grandes fora do contexto. Precisa do [pacote jev-claud](#com-o-pacote-jev-claud) instalado. | Claude Code, Cowork (tarefas no seu computador) |
 
-O plugin é só texto: não roda programas, não grava arquivos e não acessa a rede.
+A skill e o subagente são só texto. O plugin não traz código: o servidor MCP é o comando
+`jev-claud mcp` do pacote que você instalou. Sem o pacote, ele aparece como falho em `/mcp` e o
+resto funciona normalmente.
 
 ## Instalar
 
@@ -32,7 +35,13 @@ O plugin é só texto: não roda programas, não grava arquivos e não acessa a 
    celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
    sozinho ao abrir, com o nome `jevin@synced`.
 
-**Pelo marketplace do projeto** (já funciona; só no Claude Code). No 2.1.275 ou mais novo:
+**No Cowork, pelo marketplace do projeto:** abra a aba **Cowork**, depois **Personalização ›
+Plugins** (*Customize › Plugins*), clique em **Adicionar › Adicionar marketplace**, informe
+`thiago-lage/jev-claud` e instale o **Jevin** na aba **Descobrir**. Comece uma tarefa nova para
+ele carregar. Plugins instalados pelo Claude Code ficam só naquele computador e não aparecem no
+Cowork.
+
+**No Claude Code, pelo marketplace do projeto.** No 2.1.275 ou mais novo:
 
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
@@ -87,8 +96,9 @@ O `setup` pergunta antes de cada passo e pode:
   saídas acima de ~80 linhas, o Claude recebe o começo, o fim e as linhas de erro. Num teste
   real (`pytest -v` com 204 testes), 214 linhas viraram 65, com o resumo final intacto. Para
   desligar, defina `JEV_CLAUD_COMPACT=0`.
-- **Registrar as ferramentas MCP** `classify`, `rank`, `summarize_file`, `decide` e `write`.
-  Elas processam arquivos grandes fora do contexto do Claude.
+- **Ligar as ferramentas MCP** `classify`, `rank`, `summarize_file`, `decide` e `write`, que
+  processam arquivos grandes fora do contexto do Claude. Com o plugin, o servidor já vem nele;
+  o `setup` só registra outro se o do plugin não conectar, e remove o registro repetido.
 - **Instalar o Ollama**, para texto grátis no seu computador.
 
 Sem o pacote, a skill e o subagente funcionam normalmente.
@@ -98,8 +108,8 @@ Sem o pacote, a skill e o subagente funcionam normalmente.
 O plugin não lê nem guarda dados pessoais e não envia nada por conta própria. O autor não tem
 servidor e não recebe nenhum dado: nada é retido fora do seu computador.
 
-A skill `jev` pode orientar o Claude a usar as ferramentas MCP do jev-claud, **se você instalou
-o pacote e rodou o `jev-claud setup`**. Só nesse caso, e só com o que o pedido envolver, dados
+A skill `jev` pode orientar o Claude a usar as ferramentas MCP do jev-claud, que só funcionam
+**se você instalou o pacote**. Só nesse caso, e só com o que o pedido envolver, dados
 podem sair do computador para estes serviços:
 
 | Serviço | Quando |
@@ -117,6 +127,9 @@ Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
   sessão nova. Pedidos explícitos ("use o scout para...") sempre funcionam.
 - **O plugin aparece com o nome antigo (`jev` ou `jev-claude`):** rode `jev-claud setup`, ou
   desinstale o antigo e instale `jevin@jev-claud`.
+- **O servidor `plugin:jevin:jev-claud` aparece como falho:** o comando `jev-claud` não está no
+  PATH. Instale o pacote pelo `install.ps1`/`install.sh` (ele põe o comando no PATH) e abra uma
+  sessão nova.
 - **O `jevin@synced` aparece como "not loaded":** há também a cópia do marketplace ativa. Rode
   `claude plugin uninstall jevin@jev-claud` (ou `jev-claud setup`) e abra uma sessão nova.
 - **Outros problemas:** veja o

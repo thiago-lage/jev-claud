@@ -52,6 +52,9 @@ PLUGIN_ID = f"jevin@{PLUGIN_MARKETPLACE}"
 PLUGIN_SYNCED_ID = "jevin@synced"
 MCP_NAME = "jev-claud"
 MCP_ARGS = ("-m", "jev_claud", "mcp")
+# O mesmo servidor, trazido pelo plugin Jevin (`plugin/.mcp.json`, comando `jev-claud mcp`).
+# É o que leva as ferramentas ao Cowork; no Claude Code, ele dispensa o registro do setup.
+PLUGIN_MCP_NAME = f"plugin:jevin:{MCP_NAME}"
 RULE_START = "<!-- jev-claud:start -->"
 RULE_END = "<!-- jev-claud:end -->"
 # Nomes até a 0.6 (o projeto se chamava jev-claude): o setup migra cada um deles.
@@ -877,12 +880,29 @@ class Setup:
         if not path:
             return False, "precisa do Claude Code"
         code, _ = self.sys.capture([path, "mcp", "get", MCP_NAME])
+        plugin = self._plugin_mcp(path)
+        if code == 0 and plugin:
+            return False, f"duplicado: o plugin Jevin já traz o servidor ({PLUGIN_MCP_NAME})"
         if code == 0:
             return True, "ferramentas decide, classify, rank, summarize_file, write"
+        if plugin:
+            return True, f"pelo plugin Jevin ({PLUGIN_MCP_NAME})"
         old, _ = self.sys.capture([path, "mcp", "get", OLD_MCP_NAME])
         if old == 0:
             return False, f"registrado com o nome antigo ({OLD_MCP_NAME})"
         return False, "o Claude ainda não consegue delegar trabalho ao Jev e ao Ollama"
+
+    def _plugin_mcp(self, path: str) -> bool:
+        """O plugin Jevin trouxe o servidor MCP e ele conecta (o `jev-claud` está no PATH)."""
+        code, output = self.sys.capture([path, "mcp", "get", PLUGIN_MCP_NAME])
+        return code == 0 and "connected" in output.lower()
+
+    def _drop_duplicate_mcp(self, path: str) -> None:
+        """Com o servidor vindo do plugin, o registro do setup só repetiria as ferramentas no contexto."""
+        code, _ = self.sys.capture([path, "mcp", "get", MCP_NAME])
+        if code == 0 and self._plugin_mcp(path):
+            self.sys.run([path, "mcp", "remove", "-s", "user", MCP_NAME])
+            self.ui.status("ok", "Servidor MCP", "agora vem do plugin Jevin; registro repetido removido")
 
     def _install_mcp(self) -> bool:
         path = self._claude()
@@ -891,6 +911,9 @@ class Setup:
         old, _ = self.sys.capture([path, "mcp", "get", OLD_MCP_NAME])
         if old == 0:
             self.sys.run([path, "mcp", "remove", "-s", "user", OLD_MCP_NAME])
+        if self._plugin_mcp(path):
+            self._drop_duplicate_mcp(path)
+            return True
         command = [
             path,
             "mcp",
@@ -1109,6 +1132,7 @@ class Setup:
                 self.sys.run([path, "plugin", "uninstall", old])
         if _listed(marketplaces, OLD_MARKETPLACE):
             self.sys.run([path, "plugin", "marketplace", "remove", OLD_MARKETPLACE])
+        self._drop_duplicate_mcp(path)
         return True
 
     def _write_bash_shim(self) -> None:
@@ -1207,8 +1231,8 @@ class Setup:
         Só atualiza o que existe (regra no CLAUDE.md e no AGENTS.md do Codex, plugin Jevin);
         não instala nada novo. Roda no processo da versão nova, para usar a regra nova.
         No fim, limpa o que sobrou de versões anteriores: as versões do Jevin no cache que
-        nenhuma sessão aberta usa, o marketplace `jev-claude` e as pastas da 0.6 (venv e dados)
-        que nenhuma configuração usa mais.
+        nenhuma sessão aberta usa, o marketplace `jev-claude`, as pastas da 0.6 (venv e dados)
+        que nenhuma configuração usa mais e o registro MCP que o plugin Jevin passou a trazer.
         """
         failed = False
         for rule, title in (
@@ -1236,6 +1260,8 @@ class Setup:
                     self._report_cleanup(path)
             elif code == 0 and _listed(output, PLUGIN_SYNCED_ID):
                 self.ui.status("ok", "Plugin Jevin", "vem do diretório do Claude, que atualiza sozinho")
+            if not failed:
+                self._drop_duplicate_mcp(path)
             _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
             if _listed(marketplaces, OLD_MARKETPLACE):
                 self.sys.run([path, "plugin", "marketplace", "remove", OLD_MARKETPLACE])

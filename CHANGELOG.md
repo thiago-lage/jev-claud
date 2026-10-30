@@ -13,6 +13,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 - Cache em memória de 16 resumos por sessão MCP e últimas 10 chamadas com duração e falhas.
 - Skill Jevin e regra global versão 6: agente principal planeja, investiga, edita e valida;
   as ferramentas fornecem evidências e sinalizam pendências.
+- **O plugin Jevin traz o servidor MCP** (`plugin/.mcp.json`, comando `jev-claud mcp`), para as
+  ferramentas chegarem ao Cowork, que não lê o registro do Claude Code. No Claude Code, o
+  `setup` e o `refresh` removem o registro do setup quando o servidor do plugin conecta, para as
+  ferramentas não aparecerem duas vezes; se ele não conectar, o registro com o Python absoluto
+  fica. Os guias explicam como adicionar o marketplace no Cowork.
 - **`jev-claud status` como apelido do `doctor`.** Mesmo nome da ferramenta MCP `status`; antes o
   comando falhava com "invalid choice".
 

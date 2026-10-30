@@ -10,8 +10,9 @@ preparar dados e evidências. Ollama/Jev não escrevem nem editam seu código.
 
 ## Descobrir o que está disponível
 
-O plugin contém instruções; as ferramentas vêm do servidor MCP registrado pelo
-`jev-claud setup`. Confira a lista de ferramentas da sessão. Quando precisar diagnosticar
+O plugin contém instruções; as ferramentas vêm do servidor MCP `jev-claud`, que o plugin
+inicia com `jev-claud mcp` (ou que o `jev-claud setup` registra) e que só funciona com o
+pacote instalado no computador. Confira a lista de ferramentas da sessão. Quando precisar diagnosticar
 a instalação, `status` mostra backends, modelos reais, cache de resumos e atividade recente
 do servidor. A presença de configuração não comprova conexão ou uso.
 

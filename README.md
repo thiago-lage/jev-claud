@@ -62,6 +62,10 @@ curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.
     <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/claude-skills.jpg" alt="Tela Skills do Claude com a busca jevin: o plugin Jevin, por Thiago Lage" width="720">
   </p>
 
+- **No Cowork**: na aba **Cowork**, abra **Personalização › Plugins**, clique em **Adicionar ›
+  Adicionar marketplace**, informe `thiago-lage/jev-claud` e instale o **Jevin**. Ele traz a
+  skill, o subagente e as ferramentas MCP (em tarefas no seu computador, com o pacote do passo 1).
+
 - **No Claude Code** (terminal ou aba Code do app desktop): o assistente do passo 1 já oferece
   instalar. Para fazer à mão:
 
@@ -86,7 +90,7 @@ Cada peça fica na configuração do Claude Code, que ele carrega sozinho em tod
 | Peça | Onde fica | O que faz em cada conversa |
 | --- | --- | --- |
 | Hook de compactação | `~/.claude/settings.json` | Reescreve testes e builds para sair compactados, no Bash e no PowerShell (o shell do app desktop no Windows) |
-| Ferramentas MCP | registro do Claude Code (escopo de usuário) | `classify`, `rank`, `summarize_file`... ficam disponíveis |
+| Ferramentas MCP | plugin Jevin (`plugin:jevin:jev-claud`) ou, sem ele, registro do Claude Code (escopo de usuário) | `classify`, `rank`, `summarize_file`... ficam disponíveis |
 | Regra global | `~/.claude/CLAUDE.md` | Diz ao Claude quando usar cada ferramenta e quando responder direto |
 | Plugin Jevin | plugins do Claude Code | A skill `jev` entra quando é relevante; o subagente `scout` explora o código |
 
@@ -255,7 +259,7 @@ terminal: mostra o que falta, explica para que serve e **pergunta antes de insta
 | Chave do Jev | Opcional. Guarda a chave e o orçamento mensal em `config.json` (padrão US$ 0). |
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
-| Servidor MCP | Registra o `jev-claud` no Claude Code para delegar lotes e economizar tokens. |
+| Servidor MCP | Registra o `jev-claud` no Claude Code para delegar lotes e economizar tokens. Se o plugin Jevin já traz o servidor, não registra outro e remove o repetido. |
 | Saídas compactadas | Grava no `~/.claude/settings.json` o hook que compacta as saídas longas de testes e builds (detalhes abaixo). |
 | Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): skill e subagente explorador. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
@@ -451,7 +455,8 @@ depois de atualizar).
 | [Saídas de teste compactadas](#saídas-de-teste-compactadas) | Automático no Bash e no PowerShell (hook que não aprova nada sozinho) | Em desenvolvimento | Em desenvolvimento |
 | [Plugin Jevin](#plugin-do-claude-code-jevin) (skill `jev` e subagente `scout`) | Sim: diretório do Claude ou marketplace do projeto | Não | Não |
 
-O plugin Jevin também vale no Cowork e, só a skill, nas conversas do claude.ai. A biblioteca
+O plugin Jevin também vale no Cowork (com as ferramentas MCP nas tarefas que rodam no seu
+computador) e, só a skill, nas conversas do claude.ai. A biblioteca
 Python (`decide`, `write`...) e a CLI funcionam igual em qualquer lugar.
 
 ### Como o setup configura o Cursor e o Codex

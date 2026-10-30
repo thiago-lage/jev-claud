@@ -68,6 +68,7 @@ class FakeSystem(System):
             "old_jev": False,
             "old_mcp": False,
             "synced": False,  # jevin@synced: adicionado pelo diretório do Claude
+            "plugin_mcp": False,  # plugin:jevin:jev-claud, o servidor do `.mcp.json` do plugin
             # Com versão, `plugin list` sai no formato real (Version/Scope por instalação).
             "plugin_version": None,
             "plugin_scopes": ["user"],
@@ -124,7 +125,7 @@ class FakeSystem(System):
         elif command[1:3] == ["mcp", "add"]:
             self.state["mcp"] = True
         elif command[1:3] == ["mcp", "remove"]:
-            self.state["old_mcp"] = False
+            self.state["mcp" if command[-1] == "jev-claud" else "old_mcp"] = False
         elif "typesafe-sdk" in command:
             self.state["sdk"] = True
         return 0
@@ -186,8 +187,10 @@ class FakeSystem(System):
             names += ["jev-claude"] if self.state["old_marketplace"] else []
             return 0, "\n".join(names) + "\n"
         if list(command[1:3]) == ["mcp", "get"]:
-            on = self.state["mcp"] if command[3] == "jev-claud" else self.state["old_mcp"]
-            return (0, f"{command[3]}: connected\n") if on else (1, "No MCP server named\n")
+            key = {"jev-claud": "mcp", "plugin:jevin:jev-claud": "plugin_mcp"}.get(command[3], "old_mcp")
+            return (
+                (0, f"{command[3]}:\n  Status: ✔ Connected\n") if self.state[key] else (1, "No MCP server\n")
+            )
         return 1, ""
 
     def spawn(self, command: Sequence[str]) -> None:
@@ -645,6 +648,81 @@ def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Pat
     assert "duplicado: o jevin@synced do diretório só carrega sem o jevin@jev-claud" in out.getvalue()
     assert "/bin/claude plugin uninstall jevin@jev-claud" in [" ".join(c) for c in system.commands]
     assert report.results["plugin"] is True and system.state["plugin"] is False
+
+
+def test_mcp_from_the_plugin_counts_as_registered(tmp_path: Path) -> None:
+    """O plugin Jevin traz o servidor MCP: o setup não registra outro igual."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(plugin=True, plugin_mcp=True)
+    ui, out = make_ui()
+    report = Setup(system=system, ui=ui).run("yes")
+    assert report.results["mcp"] is True
+    assert "pelo plugin Jevin (plugin:jevin:jev-claud)" in out.getvalue()
+    assert not any(c[1:3] == ["mcp", "add"] for c in system.commands)
+
+
+def test_duplicate_mcp_registration_is_removed(tmp_path: Path) -> None:
+    """Quem já tinha o registro do setup e recebe o plugin com o servidor fica com um só."""
+    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system.state.update(plugin=True, mcp=True, plugin_mcp=True)
+    ui, out = make_ui()
+    setup = Setup(system=system, ui=ui)
+    assert setup._check_mcp() == (
+        False,
+        "duplicado: o plugin Jevin já traz o servidor (plugin:jevin:jev-claud)",
+    )
+    assert setup.run("yes").results["mcp"] is True
+    assert "/bin/claude mcp remove -s user jev-claud" in [" ".join(c) for c in system.commands]
+    assert system.state["mcp"] is False
+    assert "registro repetido removido" in out.getvalue()
+
+
+def test_plugin_install_drops_the_now_duplicate_registration(tmp_path: Path) -> None:
+    """O passo do MCP vem antes do plugin: o registro do setup sai depois que o plugin chega."""
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    system.state["mcp"] = True
+    ui, _ = make_ui()
+    setup = Setup(system=system, ui=ui)
+    system.state["plugin_mcp"] = True  # o que `plugin install` traz junto
+    assert setup._install_plugin() is True
+    assert system.state["mcp"] is False
+
+
+def test_refresh_drops_the_registration_the_plugin_replaced(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    system.state.update(plugin=True, jev_marketplace=True, plugin_version="0.10.0", mcp=True, plugin_mcp=True)
+    ui, out = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.0").refresh() == 0
+    assert system.state["mcp"] is False and "registro repetido removido" in out.getvalue()
+
+
+def test_plugin_server_that_does_not_connect_keeps_the_registration(tmp_path: Path) -> None:
+    """Sem o `jev-claud` no PATH, o servidor do plugin falha: o registro com o Python absoluto fica."""
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    system.state.update(plugin=True, mcp=True)
+    real = system.capture
+
+    def capture(command: Sequence[str]) -> tuple[int, str]:
+        if list(command[1:4]) == ["mcp", "get", "plugin:jevin:jev-claud"]:
+            return 0, "plugin:jevin:jev-claud:\n  Status: ✘ Failed to connect\n"
+        return real(command)
+
+    system.capture = capture  # type: ignore[method-assign]
+    ui, _ = make_ui()
+    setup = Setup(system=system, ui=ui)
+    assert setup._check_mcp() == (True, "ferramentas decide, classify, rank, summarize_file, write")
+    assert setup._install_plugin() is True and system.state["mcp"] is True
+
+
+def test_plugin_ships_the_mcp_server() -> None:
+    """O `.mcp.json` do plugin usa o nome que o setup procura e o comando que os instaladores criam."""
+    from jev_claud.wizard import MCP_NAME, PLUGIN_MCP_NAME
+
+    plugin = Path(__file__).parents[1] / "plugin"
+    data = json.loads((plugin / ".mcp.json").read_text(encoding="utf-8"))
+    assert data == {"mcpServers": {MCP_NAME: {"command": "jev-claud", "args": ["mcp"]}}}
+    manifest = json.loads((plugin / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    assert f"plugin:{manifest['name']}:{MCP_NAME}" == PLUGIN_MCP_NAME
 
 
 PLUGIN_LIST = """Installed plugins:

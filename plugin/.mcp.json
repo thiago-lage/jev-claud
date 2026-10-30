@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jev-claud": {
+      "command": "jev-claud",
+      "args": ["mcp"]
+    }
+  }
+}
