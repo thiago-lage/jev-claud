@@ -5,6 +5,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+## [0.11.0] - 2026-10-30
+
 ### Adicionado
 
 - Diagnóstico determinístico de logs (`diagnose_log` no MCP, `jev-claud diagnose` na CLI),
