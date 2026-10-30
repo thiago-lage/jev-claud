@@ -52,19 +52,13 @@ curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.
   <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/setup.png" alt="jev-claud setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
 </p>
 
-**2. O plugin Jevin**, por um destes caminhos (use só um):
+**2. O plugin Jevin**, pelo marketplace do projeto. O Jevin ainda não está no diretório de
+plugins do Claude: procurá-lo em **Descobrir** sem adicionar o marketplace não acha nada.
 
-- **Dentro do Claude** (app desktop ou claude.ai): abra **Personalização › Skills**, procure
-  **jevin** na aba **Descobrir** e adicione. O plugin fica na sua conta e o Claude Code o
-  sincroniza sozinho (`jevin@synced`).
-
-  <p align="center">
-    <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/claude-skills.jpg" alt="Tela Skills do Claude com a busca jevin: o plugin Jevin, por Thiago Lage" width="720">
-  </p>
-
-- **No Cowork**: na aba **Cowork**, abra **Personalização › Plugins**, clique em **Adicionar ›
-  Adicionar marketplace**, informe `thiago-lage/jev-claud` e instale o **Jevin**. Ele traz a
-  skill, o subagente e as ferramentas MCP (em tarefas no seu computador, com o pacote do passo 1).
+- **No Cowork e nas conversas do Claude** (app desktop ou claude.ai): abra **Personalização ›
+  Plugins**, clique em **Adicionar › Adicionar marketplace**, informe `thiago-lage/jev-claud` e
+  instale o **Jevin**. Ele fica na sua conta e traz a skill, o subagente e as ferramentas MCP
+  (essas só em tarefas do Cowork no seu computador, com o pacote do passo 1).
 
 - **No Claude Code** (terminal ou aba Code do app desktop): o assistente do passo 1 já oferece
   instalar. Para fazer à mão:
@@ -411,15 +405,14 @@ O plugin ensina o Claude a poupar contexto **sem mudar a qualidade da entrega**:
 continua implementando direto (edita arquivos, roda testes). Guia completo:
 [plugin/README.md](plugin/README.md).
 
-**Dentro do Claude** (diretório de plugins):
+O Jevin ainda não está no diretório de plugins do Claude; ele é instalado pelo marketplace do
+projeto, em dois lugares independentes:
 
-1. No claude.ai ou no app desktop, abra **Personalização › Skills** (em inglês, *Customize ›
-   Skills*), vá na aba **Descobrir**, procure **jevin** e adicione o **Jevin**.
-2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
-   celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
-   sozinho ao abrir, com o nome `jevin@synced`.
+**Na sua conta do Claude** (Cowork e conversas): em **Personalização › Plugins** (*Customize ›
+Plugins*), **Adicionar › Adicionar marketplace**, informe `thiago-lage/jev-claud` e instale o
+**Jevin**. Plugins instalados pelo Claude Code ficam só naquele computador e não aparecem aqui.
 
-**Pelo marketplace do projeto** (já funciona; só no Claude Code). No 2.1.275 ou mais novo:
+**No Claude Code.** No 2.1.275 ou mais novo:
 
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
@@ -428,9 +421,8 @@ continua implementando direto (edita arquivos, roda testes). Guia completo:
 Em versões anteriores: `/plugin marketplace add thiago-lage/jev-claud` e depois
 `/plugin install jevin@jev-claud`.
 
-Use um caminho só. Com o Jevin do diretório ativo, a cópia do marketplace impede que ele carregue;
-o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada. Sem o diretório,
-o `setup` instala pelo marketplace.
+Se o Claude Code também receber a cópia da sua conta (`jevin@synced`), a do marketplace impede
+que ela carregue; o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada.
 
 O plugin se chama **Jevin**, como o mascote. Até a 0.6 o projeto se chamava
 `jev-claude`: quem vem de lá roda o instalador de novo e depois `jev-claud setup`, que troca
@@ -453,7 +445,7 @@ depois de atualizar).
 | Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | Automático pelo setup | Automático pelo setup; ligue em *Settings › Tools & MCP* | Automático pelo setup |
 | Regra "Jev ramifica, LLM escreve" | Automático (`~/.claude/CLAUDE.md`) | Manual: `jev-claud rule` e cole em *Settings › Rules* | Automático (`AGENTS.md`) |
 | [Saídas de teste compactadas](#saídas-de-teste-compactadas) | Automático no Bash e no PowerShell (hook que não aprova nada sozinho) | Em desenvolvimento | Em desenvolvimento |
-| [Plugin Jevin](#plugin-do-claude-code-jevin) (skill `jev` e subagente `scout`) | Sim: diretório do Claude ou marketplace do projeto | Não | Não |
+| [Plugin Jevin](#plugin-do-claude-code-jevin) (skill `jev` e subagente `scout`) | Sim: marketplace do projeto | Não | Não |
 
 O plugin Jevin também vale no Cowork (com as ferramentas MCP nas tarefas que rodam no seu
 computador) e, só a skill, nas conversas do claude.ai. A biblioteca

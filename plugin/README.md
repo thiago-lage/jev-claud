@@ -25,23 +25,16 @@ resto funciona normalmente.
 
 ## Instalar
 
-**Dentro do Claude** (diretório de plugins):
+O Jevin ainda não está no diretório de plugins do Claude: procurá-lo em **Descobrir** sem
+adicionar o marketplace não acha nada. Instale pelo marketplace do projeto.
 
-1. No claude.ai ou no app desktop, abra **Personalização › Skills** (em inglês, *Customize ›
-   Skills*), vá na aba **Descobrir**, procure **jevin** e adicione o **Jevin**.
+**Na sua conta do Claude** (Cowork e conversas): no app desktop ou no claude.ai, abra
+**Personalização › Plugins** (*Customize › Plugins*), clique em **Adicionar › Adicionar
+marketplace**, informe `thiago-lage/jev-claud` e instale o **Jevin**. No Cowork, comece uma tarefa
+nova para ele carregar. Plugins instalados pelo Claude Code ficam só naquele computador e não
+aparecem aqui.
 
-   ![Tela Skills do Claude com a busca jevin: o plugin Jevin, por Thiago Lage](https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/claude-skills.jpg)
-2. Pronto: o plugin fica na sua conta e vale no Cowork e nas conversas na web, no desktop e no
-   celular. O Claude Code (2.1.273 ou mais novo, entrando com a conta do claude.ai) o sincroniza
-   sozinho ao abrir, com o nome `jevin@synced`.
-
-**No Cowork, pelo marketplace do projeto:** abra a aba **Cowork**, depois **Personalização ›
-Plugins** (*Customize › Plugins*), clique em **Adicionar › Adicionar marketplace**, informe
-`thiago-lage/jev-claud` e instale o **Jevin** na aba **Descobrir**. Comece uma tarefa nova para
-ele carregar. Plugins instalados pelo Claude Code ficam só naquele computador e não aparecem no
-Cowork.
-
-**No Claude Code, pelo marketplace do projeto.** No 2.1.275 ou mais novo:
+**No Claude Code.** No 2.1.275 ou mais novo:
 
 ```text
 /plugin install jevin --marketplace thiago-lage/jev-claud
@@ -50,8 +43,8 @@ Cowork.
 Em versões anteriores: `/plugin marketplace add thiago-lage/jev-claud` e depois
 `/plugin install jevin@jev-claud`.
 
-Use um caminho só. Com o Jevin do diretório ativo, a cópia do marketplace impede que ele carregue;
-o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada.
+Se o Claude Code também receber a cópia da sua conta (`jevin@synced`), a do marketplace impede
+que ela carregue; o `jev-claud setup` reconhece o `jevin@synced` e remove a cópia duplicada.
 
 Abra uma sessão nova do Claude Code depois de instalar.
 
@@ -138,9 +131,9 @@ Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
 
 ## Desinstalar
 
-- **Pelo diretório:** remova o Jevin em **Personalização › Skills** no claude.ai. Para só
-  desligar no Claude Code: `claude plugin disable jevin@synced`.
-- **Pelo marketplace:** `/plugin uninstall jevin@jev-claud` (ou, no terminal,
+- **Na sua conta do Claude:** remova o Jevin em **Personalização › Plugins**. Para só desligar
+  a cópia sincronizada no Claude Code: `claude plugin disable jevin@synced`.
+- **No Claude Code:** `/plugin uninstall jevin@jev-claud` (ou, no terminal,
   `claude plugin uninstall jevin@jev-claud`).
 
 ## Mais informações

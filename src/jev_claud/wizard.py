@@ -47,7 +47,7 @@ TYPESAFE_CONSOLE = "https://console.typesafe.ai/keys"
 PLUGIN_REPO = "thiago-lage/jev-claud"
 PLUGIN_MARKETPLACE = "jev-claud"
 PLUGIN_ID = f"jevin@{PLUGIN_MARKETPLACE}"
-# Adicionado pelo diretório de plugins do Claude (claude.ai) e sincronizado no Claude Code.
+# Adicionado à conta do claude.ai (Personalização › Plugins) e sincronizado no Claude Code.
 # Com ele ativo, a cópia do marketplace jev-claud impede o carregamento: fica só um dos dois.
 PLUGIN_SYNCED_ID = "jevin@synced"
 MCP_NAME = "jev-claud"
@@ -942,8 +942,8 @@ class Setup:
         code, output = self.sys.capture([path, "plugin", "list"])
         if code == 0 and _listed(output, PLUGIN_SYNCED_ID):
             if _listed(output, PLUGIN_ID):
-                return False, f"duplicado: o {PLUGIN_SYNCED_ID} do diretório só carrega sem o {PLUGIN_ID}"
-            return True, f"{PLUGIN_SYNCED_ID} (diretório do Claude)"
+                return False, f"duplicado: o {PLUGIN_SYNCED_ID} da sua conta só carrega sem o {PLUGIN_ID}"
+            return True, f"{PLUGIN_SYNCED_ID} (sua conta do Claude)"
         if code != 0 or not _listed(output, PLUGIN_ID):
             old = next((name for name in OLD_PLUGIN_IDS if _listed(output, name)), None)
             if old is not None:
@@ -1112,7 +1112,7 @@ class Setup:
         _, output = self.sys.capture([path, "plugin", "list"])
         _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])
         if _listed(output, PLUGIN_SYNCED_ID):
-            # Veio do diretório do Claude: a cópia do marketplace só atrapalharia.
+            # Veio da conta do Claude: a cópia do marketplace só atrapalharia.
             if _listed(output, PLUGIN_ID) and self.sys.run([path, "plugin", "uninstall", PLUGIN_ID]) != 0:
                 return False
         elif not _listed(output, PLUGIN_ID):
@@ -1259,7 +1259,7 @@ class Setup:
                 if not failed:
                     self._report_cleanup(path)
             elif code == 0 and _listed(output, PLUGIN_SYNCED_ID):
-                self.ui.status("ok", "Plugin Jevin", "vem do diretório do Claude, que atualiza sozinho")
+                self.ui.status("ok", "Plugin Jevin", "vem da sua conta do Claude, que o atualiza")
             if not failed:
                 self._drop_duplicate_mcp(path)
             _, marketplaces = self.sys.capture([path, "plugin", "marketplace", "list"])

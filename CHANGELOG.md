@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+### Documentação
+
+- **O Jevin não está no diretório de plugins do Claude.** Os READMEs mandavam procurá-lo em
+  **Descobrir**, mas o envio nunca foi aprovado; a imagem usada como prova mostrava a cópia da
+  própria conta. Agora o caminho é o marketplace do projeto: em **Personalização › Plugins** (conta
+  do Claude: Cowork e conversas) e no Claude Code. O setup chama o `jevin@synced` de cópia da conta.
+
 ## [0.11.0] - 2026-10-30
 
 ### Adicionado

@@ -67,7 +67,7 @@ class FakeSystem(System):
             "old_plugin": False,
             "old_jev": False,
             "old_mcp": False,
-            "synced": False,  # jevin@synced: adicionado pelo diretório do Claude
+            "synced": False,  # jevin@synced: adicionado à conta do claude.ai
             "plugin_mcp": False,  # plugin:jevin:jev-claud, o servidor do `.mcp.json` do plugin
             # Com versão, `plugin list` sai no formato real (Version/Scope por instalação).
             "plugin_version": None,
@@ -635,17 +635,17 @@ def test_plugin_from_the_claude_directory_counts_as_installed(tmp_path: Path) ->
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
     assert report.results["plugin"] is True
-    assert "jevin@synced (diretório do Claude)" in out.getvalue()
+    assert "jevin@synced (sua conta do Claude)" in out.getvalue()
     assert not any(c[1:3] == ["plugin", "install"] and c[3] == "jevin@jev-claud" for c in system.commands)
 
 
 def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Path) -> None:
-    """Com o Jevin do diretório ativo, a cópia do marketplace impede o carregamento: o setup a remove."""
+    """Com o Jevin da conta ativo, a cópia do marketplace impede o carregamento: o setup a remove."""
     system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
     system.state.update(synced=True, plugin=True)
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
-    assert "duplicado: o jevin@synced do diretório só carrega sem o jevin@jev-claud" in out.getvalue()
+    assert "duplicado: o jevin@synced da sua conta só carrega sem o jevin@jev-claud" in out.getvalue()
     assert "/bin/claude plugin uninstall jevin@jev-claud" in [" ".join(c) for c in system.commands]
     assert report.results["plugin"] is True and system.state["plugin"] is False
 
@@ -917,7 +917,7 @@ def test_refresh_installs_nothing_new(tmp_path: Path) -> None:
     system.state["synced"] = True
     ui, out = make_ui()
     Setup(system=system, ui=ui, version="0.10.0").refresh()
-    assert "diretório do Claude, que atualiza sozinho" in out.getvalue()
+    assert "sua conta do Claude, que o atualiza" in out.getvalue()
 
 
 def test_rule_mentions_ollama_and_every_effort_level() -> None:
