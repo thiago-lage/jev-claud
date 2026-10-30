@@ -11,6 +11,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
   **Descobrir**, mas o envio nunca foi aprovado; a imagem usada como prova mostrava a cópia da
   própria conta. Agora o caminho é o marketplace do projeto: em **Personalização › Plugins** (conta
   do Claude: Cowork e conversas) e no Claude Code. O setup chama o `jevin@synced` de cópia da conta.
+- O `plugin.json` não tem mais `icon`, `documentationUrl`, `supportUrl` e `privacyPolicyUrl`.
+  Não são chaves do manifesto: o claude.ai as descartava com um aviso ao sincronizar o marketplace.
+  Esses links vão no formulário de envio ao diretório.
 
 ## [0.11.0] - 2026-10-30
 

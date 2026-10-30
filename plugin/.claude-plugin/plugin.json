@@ -17,9 +17,5 @@
     "context",
     "tokens",
     "subagent"
-  ],
-  "icon": "./icon.png",
-  "documentationUrl": "https://github.com/thiago-lage/jev-claud/blob/main/plugin/README.md",
-  "supportUrl": "https://github.com/thiago-lage/jev-claud/blob/main/SUPPORT.md",
-  "privacyPolicyUrl": "https://github.com/thiago-lage/jev-claud/blob/main/PRIVACY.md"
+  ]
 }
