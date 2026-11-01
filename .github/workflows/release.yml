@@ -93,7 +93,7 @@ jobs:
           /tmp/wheel-test/bin/pip install dist/*.whl
           /tmp/wheel-test/bin/jev-claud --version
           /tmp/wheel-test/bin/python -c "from jev_claud import JevClaud, Image, box; print('ok')"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
