@@ -26,13 +26,13 @@ from jev_claud.errors import (
 from jev_claud.media import Image
 from jev_claud.questions import Box, Choice, Noul, Score, box, choice, noul, score
 from jev_claud.store import Store
-from jev_claud.writers import CallableWriter, OllamaWriter, OpenAICompatibleWriter, Writer
+from jev_claud.writers import CallableWriter, OpenAICompatibleWriter, Writer
 
 # Nomes antigos (até a 0.6), para código existente não quebrar.
 JevClaude = JevClaud
 JevClaudeError = JevClaudError
 
-__version__ = "0.11.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "BackendError",
@@ -54,7 +54,6 @@ __all__ = [
     "NoWriterError",
     "Noul",
     "OfflineBackend",
-    "OllamaWriter",
     "OpenAICompatibleWriter",
     "Policy",
     "QuestionError",

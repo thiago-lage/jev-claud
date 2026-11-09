@@ -27,9 +27,6 @@ CONFIG_KEYS = frozenset(
         "model",
         "cache_ttl_days",
         "typesafe_api_key",
-        "ollama_model",
-        "ollama_model_fast",
-        "ollama_model_strong",
         "offline",
         "setup_version",
         "strategy",
@@ -120,14 +117,8 @@ class Settings:
     """`JEV_CLAUD_CACHE_TTL_DAYS`: validade do cache para aliases (versões fixas não expiram). 0 desliga."""
     typesafe_api_key: str | None = field(default=None, repr=False)
     """`TYPESAFE_API_KEY`: chave do Jev."""
-    ollama_model: str | None = None
-    """`JEV_CLAUD_OLLAMA_MODEL`: modelo do Ollama para texto (padrão `llama3.2`)."""
-    ollama_model_fast: str | None = None
-    """`JEV_CLAUD_OLLAMA_MODEL_FAST`: modelo rápido para os blocos (ex.: `llama3.2:1b`)."""
-    ollama_model_strong: str | None = None
-    """`JEV_CLAUD_OLLAMA_MODEL_STRONG`: modelo forte para o esforço alto (ex.: `qwen2.5:7b`)."""
     offline: bool = False
-    """`JEV_CLAUD_OFFLINE`: 1 garante tudo local e grátis (nunca o Jev, só LLM local)."""
+    """`JEV_CLAUD_OFFLINE`: 1 garante decisões locais e grátis (nunca o Jev)."""
     strategy: str = "cascade"
     """`JEV_CLAUD_STRATEGY`: `cascade` (offline primeiro, Jev só nos incertos) ou `jev` (tudo no Jev)."""
     cascade_accept: float = 0.8
@@ -150,9 +141,6 @@ class Settings:
             model=_text("JEV_CLAUD_MODEL", file.get("model")) or "latest",
             cache_ttl_days=_float("JEV_CLAUD_CACHE_TTL_DAYS", file.get("cache_ttl_days"), 7.0),
             typesafe_api_key=_text("TYPESAFE_API_KEY", file.get("typesafe_api_key")),
-            ollama_model=_text("JEV_CLAUD_OLLAMA_MODEL", file.get("ollama_model")),
-            ollama_model_fast=_text("JEV_CLAUD_OLLAMA_MODEL_FAST", file.get("ollama_model_fast")),
-            ollama_model_strong=_text("JEV_CLAUD_OLLAMA_MODEL_STRONG", file.get("ollama_model_strong")),
             offline=_bool("JEV_CLAUD_OFFLINE", file.get("offline"), False),
             strategy=(_text("JEV_CLAUD_STRATEGY", file.get("strategy")) or "cascade").lower(),
             cascade_accept=_float("JEV_CLAUD_CASCADE_ACCEPT", file.get("cascade_accept"), 0.8),

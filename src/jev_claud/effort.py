@@ -1,26 +1,20 @@
-"""Esforço: quanto trabalho, e qual modelo local, cada tarefa de texto merece.
+"""Esforço: quanto trabalho cada tarefa de texto merece, no LLM da sessão.
 
-Espelha o seletor de esforço do Claude, mas na camada grátis e offline: o texto grande é
-quebrado em blocos, os blocos vão a um modelo local rápido e a junção final a um modelo mais
-capaz. Tudo roda na LLM local (Ollama por padrão): nada sai da máquina, nada é cobrado.
+Espelha o seletor de esforço do Claude. O esforço controla só o tamanho dos blocos e a
+profundidade do trabalho; o modelo é sempre o LLM da sessão em que o jev-claud está
+instalado (não há seletor de modelo próprio, nem modelo local).
 
-Os níveis seguem o seletor de esforço do app do Claude:
+| Esforço   | Blocos                         | Junção                  | Revisão |
+| --------- | ------------------------------ | ----------------------- | ------- |
+| baixo     | grandes, sem sobreposição      | curta                   | não     |
+| medio     | médios, pouca sobreposição     | média                   | não     |
+| alto      | menores, mais sobreposição     | longa                   | não     |
+| extra     | pequenos, mais sobreposição    | longa                   | não     |
+| max       | os menores, mais sobreposição  | a mais longa            | não     |
+| ultracode | como `max`                     | a mais longa            | sim     |
 
-| Esforço   | Blocos                         | Modelo dos blocos | Modelo da junção | Revisão |
-| --------- | ------------------------------ | ----------------- | ---------------- | ------- |
-| baixo     | grandes, sem sobreposição      | rápido            | rápido           | não     |
-| medio     | médios, pouca sobreposição     | rápido            | padrão           | não     |
-| alto      | menores, mais sobreposição     | padrão            | forte            | não     |
-| extra     | pequenos, mais sobreposição    | padrão            | forte            | não     |
-| max       | os menores, mais sobreposição  | forte             | forte            | não     |
-| ultracode | como `max`                     | forte             | forte            | sim     |
-
-A revisão do `ultracode` é uma passada a mais do modelo forte, que confere o resumo final
-contra os resumos parciais e tira o que não estiver apoiado neles.
-
-Os modelos de cada camada vêm de `JEV_CLAUD_OLLAMA_MODEL_FAST` (rápido),
-`JEV_CLAUD_OLLAMA_MODEL` (padrão) e `JEV_CLAUD_OLLAMA_MODEL_STRONG` (forte). Camada sem modelo
-definido usa o padrão, então nada quebra sem configuração extra.
+A revisão do `ultracode` é uma passada a mais, que confere o resumo final contra os
+resumos parciais e tira o que não estiver apoiado neles.
 """
 
 from __future__ import annotations
@@ -29,10 +23,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 Effort = Literal["baixo", "medio", "alto", "extra", "max", "ultracode"]
-Tier = Literal["rapido", "padrao", "forte"]
 
 EFFORTS: tuple[Effort, ...] = ("baixo", "medio", "alto", "extra", "max", "ultracode")
-TIERS: tuple[Tier, ...] = ("rapido", "padrao", "forte")
 DEFAULT_EFFORT: Effort = "medio"
 
 _ALIASES: dict[str, Effort] = {
@@ -49,40 +41,38 @@ _ALIASES: dict[str, Effort] = {
 
 @dataclass(frozen=True)
 class EffortPlan:
-    """Como um esforço quebra e distribui o trabalho entre os modelos locais."""
+    """Como um esforço quebra o texto em blocos e quão fundo vai a junção."""
 
     chunk_chars: int
-    """Tamanho máximo de cada bloco enviado à LLM (caracteres)."""
+    """Tamanho máximo de cada bloco (caracteres)."""
     overlap_chars: int
     """Quanto cada bloco repete do anterior, para não perder o que caiu na emenda."""
     part_tokens: int
     """Limite de resposta por bloco."""
     final_tokens: int
     """Limite de resposta da junção final."""
-    part_tier: Tier
-    final_tier: Tier
     verify: bool = False
     """Revisa o resumo final contra os parciais, tirando o que não estiver apoiado neles."""
 
 
 PLANS: dict[Effort, EffortPlan] = {
-    "baixo": EffortPlan(9_000, 0, 200, 450, "rapido", "rapido"),
-    "medio": EffortPlan(6_000, 300, 300, 700, "rapido", "padrao"),
-    "alto": EffortPlan(4_000, 500, 400, 1_000, "padrao", "forte"),
-    "extra": EffortPlan(3_000, 500, 450, 1_200, "padrao", "forte"),
-    "max": EffortPlan(2_500, 600, 500, 1_400, "forte", "forte"),
-    "ultracode": EffortPlan(2_500, 600, 500, 1_400, "forte", "forte", verify=True),
+    "baixo": EffortPlan(9_000, 0, 200, 450),
+    "medio": EffortPlan(6_000, 300, 300, 700),
+    "alto": EffortPlan(4_000, 500, 400, 1_000),
+    "extra": EffortPlan(3_000, 500, 450, 1_200),
+    "max": EffortPlan(2_500, 600, 500, 1_400),
+    "ultracode": EffortPlan(2_500, 600, 500, 1_400, verify=True),
 }
 
-WRITE_TIER: dict[Effort, Tier] = {
-    "baixo": "rapido",
-    "medio": "padrao",
-    "alto": "forte",
-    "extra": "forte",
-    "max": "forte",
-    "ultracode": "forte",
+WRITE_TOKENS: dict[Effort, int] = {
+    "baixo": 400,
+    "medio": 800,
+    "alto": 1_200,
+    "extra": 1_600,
+    "max": 2_000,
+    "ultracode": 2_000,
 }
-"""Camada de modelo usada por um `write` simples em cada esforço."""
+"""Limite de resposta de um `write` em cada esforço (quando a chamada não define `max_tokens`)."""
 
 
 def normalize_effort(effort: str | None) -> Effort:

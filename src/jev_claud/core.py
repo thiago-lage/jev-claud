@@ -6,13 +6,13 @@
 Com o Jev disponível, a estratégia padrão é a **cascata**: cache -> offline (grátis) ->
 Jev só para as perguntas que o offline não resolveu com confiança, numa única requisição.
 O óbvio sai de graça; o difícil continua com o Jev.
-- Uma **pessoa vai ler** a resposta? `write` -> LLM (local/gratuita por padrão).
+- Uma **pessoa vai ler** a resposta? `write` -> o LLM da sessão em que o jev-claud está
+  instalado (por MCP sampling), ou um `Writer` que você passar.
 """
 
 from __future__ import annotations
 
 import asyncio
-import copy
 import hashlib
 import inspect
 import json
@@ -39,12 +39,12 @@ from jev_claud.decision import (
     noul_confidence,
     score_confidence,
 )
-from jev_claud.effort import TIERS, EffortPlan, Tier, effort_plan, pack, split_text
+from jev_claud.effort import EffortPlan, effort_plan, pack, split_text
 from jev_claud.errors import BackendError, BudgetExceeded, NoWriterError, WriterError
 from jev_claud.models import ALIASES, resolve_model
 from jev_claud.questions import Choice, Content, Noul, Question, Score, noul, to_wire
 from jev_claud.store import Store
-from jev_claud.writers import OpenAICompatibleWriter, Writer, auto_writer, is_local_url
+from jev_claud.writers import Writer, is_local_url
 
 logger = logging.getLogger("jev_claud")
 
@@ -95,7 +95,8 @@ class JevClaud:
     Args:
         jev: `JevBackend`, `None` (nunca usar Jev) ou `"auto"` (usa se houver
             `TYPESAFE_API_KEY` e `typesafe-sdk` instalado).
-        writer: LLM de texto, `None` ou `"auto"` (detectada no primeiro `write`).
+        writer: LLM de texto. Padrão `None`: o texto fica com o LLM da sessão (o servidor MCP
+            liga o MCP sampling do host); passe um `Writer` para usar a biblioteca num app.
         model: `latest` | `preview` | `newest` | `jev-X.Y.Z` (padrão: `JEV_CLAUD_MODEL` ou `latest`).
         policy: limiares de confiança padrão.
         budget: teto mensal para o Jev (padrão: `JEV_CLAUD_BUDGET_USD`, 0 = custo zero).
@@ -108,14 +109,14 @@ class JevClaud:
             (padrão: `JEV_CLAUD_CASCADE_ACCEPT`, 0,8). Suba para escalar mais ao Jev.
 
     Com `JEV_CLAUD_OFFLINE=1` (`Settings.offline`), nada sai da máquina: o Jev nunca é usado
-    e o texto só vai a uma LLM local (esta máquina ou a rede local).
+    e um `Writer` explícito só é aceito se apontar para esta máquina ou a rede local.
     """
 
     def __init__(
         self,
         *,
         jev: JevBackend | Literal["auto"] | None = "auto",
-        writer: Writer | Literal["auto"] | None = "auto",
+        writer: Writer | None = None,
         model: str | None = None,
         policy: Policy | None = None,
         budget: Budget | None = None,
@@ -145,9 +146,7 @@ class JevClaud:
             if jev is None and has_key:
                 logger.warning("Chave do Jev configurada, mas o SDK falta: pip install 'jev-claud[jev]'.")
         self.jev: JevBackend | None = jev
-        self._writer: Writer | Literal["auto"] | None = writer
-        self._tier_writers: dict[Tier, Writer] = {}
-        self._broken_tiers: set[Tier] = set()
+        self._writer: Writer | None = writer
         self.model_spec = model or self.settings.model
         self.policy = policy or Policy()
         self.budget = budget or Budget(self.settings.budget_usd, self.settings.usd_per_mtok)
@@ -355,36 +354,12 @@ class JevClaud:
 
     @property
     def writer(self) -> Writer | None:
-        if self._writer == "auto":
-            self._writer = auto_writer(self.settings.ollama_model, local_only=self.settings.offline)
+        """O LLM de texto em uso, ou `None` quando o texto fica com o agente da sessão."""
         return self._writer
 
-    def tier_models(self) -> dict[str, str | None]:
-        """Modelo usado em cada camada (`rapido`, `padrao`, `forte`)."""
-        models: dict[str, str | None] = {}
-        for tier in TIERS:
-            writer = self.writer_for(tier)
-            models[tier] = getattr(writer, "model", None) or (writer.name if writer else None)
-        return models
-
-    def writer_for(self, tier: Tier | None) -> Writer | None:
-        """A LLM da camada pedida: o mesmo endpoint, trocando só o modelo.
-
-        Camada sem modelo configurado, que já falhou nesta sessão, ou LLM que não é um endpoint
-        compatível com OpenAI (ex.: `CallableWriter`) usa a LLM padrão.
-        """
-        base = self.writer
-        if base is None or tier in (None, "padrao") or tier in self._broken_tiers:
-            return base
-        model = self.settings.ollama_model_fast if tier == "rapido" else self.settings.ollama_model_strong
-        if not model or not isinstance(base, OpenAICompatibleWriter) or model == base.model:
-            return base
-        writer = self._tier_writers.get(tier)
-        if writer is None:
-            clone = copy.copy(base)
-            clone.model = model
-            writer = self._tier_writers[tier] = clone
-        return writer
+    @writer.setter
+    def writer(self, writer: Writer | None) -> None:
+        self._writer = writer
 
     def write(
         self,
@@ -394,48 +369,27 @@ class JevClaud:
         system: str | None = None,
         max_tokens: int = 800,
         temperature: float = 0.3,
-        tier: Tier | None = None,
     ) -> str:
-        """Gera texto livre para uma pessoa ler. Nunca use isto para decidir um `if`.
-
-        `tier` escolhe o modelo local (`rapido`, `padrao`, `forte`); se o modelo da camada
-        falhar (ex.: não foi baixado), a chamada é refeita com o modelo padrão.
-        """
-        base = self.writer
-        if base is None:
+        """Gera texto livre para uma pessoa ler. Nunca use isto para decidir um `if`."""
+        writer = self.writer
+        if writer is None:
             raise NoWriterError(
-                "Nenhuma LLM de texto configurada. Opções gratuitas: rode o Ollama localmente "
-                "(https://ollama.com) ou defina JEV_CLAUD_LLM_BASE_URL e JEV_CLAUD_LLM_MODEL para um "
-                "endpoint compatível com OpenAI."
+                "Nenhum LLM de sessão disponível para gerar texto. No servidor MCP, o host precisa "
+                "oferecer MCP sampling; sem ele, as ferramentas devolvem o trabalho ao agente. "
+                "Na biblioteca, passe JevClaud(writer=CallableWriter(...))."
             )
-        url = getattr(base, "base_url", None)
+        url = getattr(writer, "base_url", None)
         if self.settings.offline and isinstance(url, str) and not is_local_url(url):
             raise WriterError(f"JEV_CLAUD_OFFLINE=1 só aceita LLM local; esta aponta para {url}.")
         if context is not None:
-            rendered = (
-                context if isinstance(context, str) else json.dumps(context, ensure_ascii=False, indent=2)
-            )
-            prompt = f"{prompt}\n\nContexto:\n{rendered}"
-        writer = self.writer_for(tier) or base
-        try:
-            return writer.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
-        except WriterError as error:
-            if writer is base or tier is None:
-                raise
-            logger.warning(
-                "Modelo %s falhou (%s); usando %s.",
-                getattr(writer, "model", tier),
-                error,
-                getattr(base, "model", base.name),
-            )
-            self._broken_tiers.add(tier)
-            return base.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
+            prompt = f"{prompt}\n\nContexto:\n{render_context(context)}"
+        return writer.write(prompt, system=system, max_tokens=max_tokens, temperature=temperature)
 
     def summarize(self, text: str, *, focus: str | None = None, effort: str | None = None) -> str:
-        """Resume um texto grande com a LLM local, quebrado em blocos conforme o `effort`.
+        """Resume um texto grande com o LLM de texto, quebrado em blocos conforme o `effort`.
 
         Os níveis seguem o seletor do app do Claude: `baixo`, `medio` (padrão), `alto`,
-        `extra`, `max` e `ultracode`. Quanto mais alto, menores os blocos e mais forte o modelo
+        `extra`, `max` e `ultracode`. Quanto mais alto, menores os blocos e mais longa a junção
         (tabela em `jev_claud.effort`); o `ultracode` ainda revisa o resumo contra as fontes.
         A junção é hierárquica (nunca manda à LLM mais que um bloco por vez) e uma parte que
         falha não derruba o resumo: ela fica de fora e o resumo avisa.
@@ -451,7 +405,6 @@ class JevClaud:
                 context=chunks[0],
                 system=SUMMARY_SYSTEM,
                 max_tokens=plan.final_tokens,
-                tier=plan.final_tier,
             )
             return self._verify(single, chunks[0], plan) if plan.verify else single
         partials: list[str] = []
@@ -465,13 +418,12 @@ class JevClaud:
                         context=chunk,
                         system=SUMMARY_SYSTEM,
                         max_tokens=plan.part_tokens,
-                        tier=plan.part_tier,
                     )
                 )
             except WriterError as error:
                 failed += 1
                 last_error = error
-                logger.warning("Parte %d de %d falhou na LLM local: %s", n, len(chunks), error)
+                logger.warning("Parte %d de %d falhou no LLM: %s", n, len(chunks), error)
         if not partials:
             assert last_error is not None
             raise last_error
@@ -485,8 +437,7 @@ class JevClaud:
             summary = self._verify(summary, _join_parts(partials), plan)
         if failed:
             summary += (
-                f"\n\n(Aviso: {failed} de {len(chunks)} partes falharam na LLM local "
-                "e ficaram fora deste resumo.)"
+                f"\n\n(Aviso: {failed} de {len(chunks)} partes falharam no LLM e ficaram fora deste resumo.)"
             )
         return summary
 
@@ -501,7 +452,6 @@ class JevClaud:
             context=f"RESUMO:\n{summary}\n\nFONTES:\n{sources}",
             system=SUMMARY_SYSTEM,
             max_tokens=plan.final_tokens,
-            tier=plan.final_tier,
         )
 
     def _merge(self, parts: list[str], focus: str, plan: EffortPlan, *, final: bool) -> str:
@@ -513,7 +463,6 @@ class JevClaud:
                 context=joined,
                 system=SUMMARY_SYSTEM,
                 max_tokens=plan.final_tokens,
-                tier=plan.final_tier,
             )
         prompt = f"Junte estes resumos parciais em um só, sem perder fatos. Foco: {focus}"
         return self.write(
@@ -521,7 +470,6 @@ class JevClaud:
             context=joined,
             system=SUMMARY_SYSTEM,
             max_tokens=plan.part_tokens * 2,
-            tier=plan.part_tier,
         )
 
     # ------------------------------------------------------------------
@@ -547,7 +495,7 @@ class JevClaud:
     def status(self) -> dict[str, Any]:
         """Retrato da configuração atual (usado por `jev-claud doctor`)."""
         spent_usd, spent_tokens, calls = self.store.spent()
-        writer = self._writer if self._writer != "auto" else None
+        writer = self._writer
         return {
             "offline": self.settings.offline,
             "jev": {
@@ -567,9 +515,7 @@ class JevClaud:
                 "input_tokens_this_month": spent_tokens,
                 "calls_this_month": calls,
             },
-            "writer": getattr(writer, "name", None)
-            if writer
-            else ("auto" if self._writer == "auto" else None),
+            "writer": getattr(writer, "name", None) if writer else None,
             "cache": {"path": self.store.path, "entries": self.store.cache_size()},
             "routing": {
                 layer: {"decisions": n, "saved_tokens": saved}
@@ -646,6 +592,17 @@ class JevClaud:
 # ----------------------------------------------------------------------
 # Auxiliares
 # ----------------------------------------------------------------------
+
+
+def render_context(context: Any) -> str:
+    """Contexto de apoio como texto: strings passam direto, o resto vira JSON legível."""
+    return context if isinstance(context, str) else json.dumps(context, ensure_ascii=False, indent=2)
+
+
+def summary_blocks(text: str, *, effort: str | None = None) -> list[str]:
+    """Os blocos que o `effort` produz para `text`, na ordem (para o agente processar)."""
+    plan = effort_plan(effort)
+    return split_text(text, plan.chunk_chars, plan.overlap_chars)
 
 
 def _join_parts(parts: Sequence[str]) -> str:

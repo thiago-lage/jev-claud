@@ -110,9 +110,13 @@ def test_cli_spend_update_cache_models(capsys: pytest.CaptureFixture[str]) -> No
     assert "TYPESAFE_API_KEY" in capsys.readouterr().err
 
 
-def test_cli_write_without_llm(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["write", "oi"]) == 1
-    assert "Ollama" in capsys.readouterr().err
+def test_cli_has_no_local_text_llm(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main(["write", "oi"])  # o texto fica com o LLM da sessão, não com a CLI
+    capsys.readouterr()
+    assert main(["doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "o da sessão" in out and "modelo local : nenhum" in out
 
 
 def test_cli_without_command_shows_splash(capsys: pytest.CaptureFixture[str]) -> None:

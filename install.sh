@@ -6,7 +6,7 @@
 # 1. Encontra o Python 3.10+.
 # 2. Cria um ambiente isolado em ~/.local/share/jev-claud (nao mexe no Python do sistema).
 # 3. Coloca o comando `jev-claud` em ~/.local/bin e garante que essa pasta esta no PATH.
-# 4. Abre o assistente `jev-claud setup` (Ollama, Claude Code, skill TypeSafe, chave do Jev).
+# 4. Abre o assistente `jev-claud setup` (Claude Code, skill TypeSafe, plugin, chave do Jev).
 #
 # Instala a versao lancada no PyPI. Variaveis opcionais: JEV_CLAUD_SPEC (o que o pip instala;
 # versao em desenvolvimento: "jev-claud[jev] @ git+https://github.com/thiago-lage/jev-claud"),

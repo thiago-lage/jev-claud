@@ -11,8 +11,8 @@ Vale para o plugin **Jevin** (Claude Code e Cowork) e para o pacote Python **jev
 - O plugin Jevin é só texto (uma skill e um subagente). Ele não roda programas, não grava
   arquivos e não acessa a rede.
 - O pacote jev-claud guarda tudo **no seu computador**. Ele só envia dados para serviços que
-  **você** configura: a API do TypeSafe Jev (com chave e orçamento) e uma LLM de texto (o Ollama
-  local, por padrão).
+  **você** configura: a API do TypeSafe Jev (com chave e orçamento). O texto fica com o LLM da sessão em
+  que o jev-claud está instalado: não há modelo local nem outro backend de texto.
 
 ## Plugin Jevin
 
@@ -34,7 +34,7 @@ Tudo fica na pasta de dados do jev-claud: `%LOCALAPPDATA%\jev-claud` no Windows,
 
 | O quê | Onde | Para quê |
 | --- | --- | --- |
-| Chave e orçamento do Jev, modelo do Ollama, versão do setup | `config.json` (no macOS e no Linux, com permissão só para o seu usuário) | Configuração feita pelo `jev-claud setup` |
+| Chave e orçamento do Jev, versão do setup | `config.json` (no macOS e no Linux, com permissão só para o seu usuário) | Configuração feita pelo `jev-claud setup` |
 | Respostas de decisões já tomadas | `jev_claud.sqlite3`, tabela `cache` | Não pagar duas vezes pela mesma pergunta. A chave do cache é um hash (SHA-256) do estado e das perguntas; o estado em si não é gravado, só as respostas (que podem conter trechos extraídos dele) |
 | Gastos e contagem de chamadas por mês | `jev_claud.sqlite3`, tabela `ledger` | Respeitar o orçamento mensal |
 | Contadores de economia por mês | `jev_claud.sqlite3`, tabelas `routing` e `savings` | A linha "economizou este mês" e o `jev-claud spend` |
@@ -53,9 +53,9 @@ depois de perguntar:
 | Para onde | Quando | O que vai |
 | --- | --- | --- |
 | API do TypeSafe Jev (`api.typesafe.ai`) | Só com uma chave configurada **e** orçamento acima de US$ 0 (o padrão é US$ 0) | O estado e as perguntas de cada decisão que vai ao Jev, inclusive imagens se você usar `Image`. Em modo cascata, só as perguntas que o modo offline não resolveu. Segue a política de privacidade da TypeSafe |
-| Ollama | Ao usar `write`, `summarize_file` ou o MCP `write` | O texto da instrução ou do arquivo. Por padrão o Ollama roda no seu computador (`localhost:11434`); se você apontar `OLLAMA_HOST` para outra máquina, o texto vai para ela |
-| LLM compatível com a API da OpenAI | Só se você definir `JEV_CLAUD_LLM_BASE_URL` | O mesmo texto acima, para o serviço que você escolheu, com a política dele |
-| PyPI, winget, Homebrew, ollama.com, claude.ai, GitHub | Durante a instalação, a atualização e o `jev-claud setup`, depois de perguntar | Os pedidos normais de download de cada instalador |
+| O LLM da sessão (o host do MCP) | Ao usar `write`, `summarize_file`, `classify`, `rank` ou `decide` pelo MCP | Com MCP sampling: o texto da instrução, os blocos do arquivo ou os itens incertos vão ao host, que os envia ao modelo da sessão com a política dele. Sem sampling: nada sai; os blocos voltam ao próprio agente na resposta da ferramenta |
+| Um `Writer` que você passar à biblioteca | Só se o seu código passar `JevClaud(writer=...)` | O texto de `write` e `summarize`, para o serviço que você escolheu, com a política dele |
+| PyPI, winget, Homebrew, claude.ai, GitHub | Durante a instalação, a atualização e o `jev-claud setup`, depois de perguntar | Os pedidos normais de download de cada instalador |
 
 O hook de compactação, o `jev-claud run` e o modo offline não acessam a rede.
 

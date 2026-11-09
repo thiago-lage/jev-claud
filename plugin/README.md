@@ -92,7 +92,8 @@ O `setup` pergunta antes de cada passo e pode:
 - **Ligar as ferramentas MCP** `classify`, `rank`, `summarize_file`, `decide` e `write`, que
   processam arquivos grandes fora do contexto do Claude. Com o plugin, o servidor já vem nele;
   o `setup` só registra outro se o do plugin não conectar, e remove o registro repetido.
-- **Instalar o Ollama**, para texto grátis no seu computador.
+  O texto dessas ferramentas fica com o LLM da sessão: por MCP sampling quando o host oferece;
+  senão, o trabalho volta ao próprio agente (`mode: "agent"`). Não há modelo local para instalar.
 
 Sem o pacote, a skill e o subagente funcionam normalmente.
 
@@ -108,8 +109,7 @@ podem sair do computador para estes serviços:
 | Serviço | Quando |
 | --- | --- |
 | API do TypeSafe Jev (`api.typesafe.ai`) | Só com uma chave configurada e orçamento acima de US$ 0. O padrão é US$ 0, sem envio |
-| Ollama | Ao gerar ou resumir texto. Roda no seu computador por padrão (`localhost:11434`) |
-| Uma LLM compatível com a API da OpenAI | Só se você definir `JEV_CLAUD_LLM_BASE_URL` |
+| O LLM da sessão (o host do MCP) | Ao gerar ou resumir texto e nos itens incertos, só se o host oferecer MCP sampling. Sem sampling, nada sai: o trabalho volta ao agente |
 
 Detalhes completos, inclusive o que fica no seu computador e como apagar tudo:
 [política de privacidade](https://github.com/thiago-lage/jev-claud/blob/main/PRIVACY.md).

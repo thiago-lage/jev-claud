@@ -1,8 +1,7 @@
-"""Esforço, camadas de modelo local, resumo em blocos e modo offline, sem rede."""
+"""Esforço (blocos e profundidade), resumo em blocos e modo offline, sem rede."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import pytest
@@ -17,8 +16,9 @@ from jev_claud import (
     WriterError,
     noul,
 )
+from jev_claud.core import summary_blocks
 from jev_claud.effort import PLANS, normalize_effort, pack, split_text
-from jev_claud.writers import auto_writer, is_local_url
+from jev_claud.writers import is_local_url
 
 # -- fatiamento --------------------------------------------------------------------------------
 
@@ -71,26 +71,32 @@ def test_pack_groups_by_size() -> None:
 
 def test_plans_grow_work_with_effort() -> None:
     assert PLANS["baixo"].chunk_chars > PLANS["medio"].chunk_chars > PLANS["alto"].chunk_chars
-    assert PLANS["baixo"].final_tier == "rapido" and PLANS["alto"].final_tier == "forte"
+    assert PLANS["baixo"].final_tokens < PLANS["medio"].final_tokens < PLANS["max"].final_tokens
+    assert not PLANS["max"].verify and PLANS["ultracode"].verify
+    assert not hasattr(PLANS["max"], "final_tier")  # o esforço não escolhe modelo
 
 
-# -- camadas de modelo -------------------------------------------------------------------------
+def test_summary_blocks_follow_the_effort() -> None:
+    text = "Uma frase com fatos. " * 1_000
+    low, high = summary_blocks(text, effort="baixo"), summary_blocks(text, effort="max")
+    assert len(low) < len(high)
+    assert all(len(block) <= PLANS["max"].chunk_chars for block in high)
+
+
+# -- um único LLM ------------------------------------------------------------------------------
 
 
 class FakeEndpoint(OpenAICompatibleWriter):
-    """Endpoint compatível com OpenAI que só registra o modelo usado em cada chamada."""
+    """Endpoint compatível com OpenAI que só registra as chamadas."""
 
-    def __init__(self, calls: list[str], broken: frozenset[str] = frozenset(), **kwargs: Any) -> None:
-        super().__init__(kwargs.pop("base_url", "http://localhost:11434/v1"), "padrao-7b", **kwargs)
+    def __init__(self, calls: list[str], **kwargs: Any) -> None:
+        super().__init__(kwargs.pop("base_url", "http://localhost:8080/v1"), "sessao", **kwargs)
         self.calls = calls
-        self.broken = broken
 
     def write(
         self, prompt: str, *, system: str | None = None, max_tokens: int = 800, temperature: float = 0.3
     ) -> str:
-        self.calls.append(self.model)
-        if self.model in self.broken:
-            raise WriterError(f"model '{self.model}' not found")
+        self.calls.append(prompt)
         return f"{self.model}: ok"
 
 
@@ -98,69 +104,31 @@ def _app(writer: Any, **settings: Any) -> JevClaud:
     return JevClaud(store=":memory:", writer=writer, settings=Settings(**settings))
 
 
-def test_tiers_swap_only_the_model() -> None:
-    calls: list[str] = []
-    r = _app(FakeEndpoint(calls), ollama_model_fast="rapido-1b", ollama_model_strong="forte-14b")
-    assert r.write("a", tier="rapido") == "rapido-1b: ok"
-    assert r.write("b", tier="forte") == "forte-14b: ok"
-    assert r.write("c") == "padrao-7b: ok"
-    assert r.tier_models() == {"rapido": "rapido-1b", "padrao": "padrao-7b", "forte": "forte-14b"}
-    assert calls == ["rapido-1b", "forte-14b", "padrao-7b"]
-    r.close()
-
-
-def test_tier_without_model_uses_default() -> None:
+def test_write_uses_the_single_writer_and_appends_context() -> None:
     calls: list[str] = []
     r = _app(FakeEndpoint(calls))
-    r.write("a", tier="rapido")
-    r.write("b", tier="forte")
-    assert calls == ["padrao-7b", "padrao-7b"]
-    r.close()
-
-
-def test_broken_tier_falls_back_once_and_is_remembered(caplog: pytest.LogCaptureFixture) -> None:
-    calls: list[str] = []
-    r = _app(FakeEndpoint(calls, frozenset({"forte-14b"})), ollama_model_strong="forte-14b")
-    with caplog.at_level(logging.WARNING, logger="jev_claud"):
-        assert r.write("a", tier="forte") == "padrao-7b: ok"
-    assert "forte-14b falhou" in caplog.text
-    assert r.write("b", tier="forte") == "padrao-7b: ok"
-    assert calls == ["forte-14b", "padrao-7b", "padrao-7b"]  # não tenta o modelo quebrado de novo
-    r.close()
-
-
-def test_default_model_failure_still_raises() -> None:
-    r = _app(FakeEndpoint([], frozenset({"padrao-7b"})))
-    with pytest.raises(WriterError):
-        r.write("a", tier="rapido")
+    assert r.write("a", context={"k": 1}) == "sessao: ok"
+    assert calls == ['a\n\nContexto:\n{\n  "k": 1\n}']
+    assert r.status()["writer"] == "openai-compatible"
     r.close()
 
 
 # -- resumo em blocos ----------------------------------------------------------------------------
 
 
-def test_summarize_routes_parts_and_merge_to_their_tiers() -> None:
+def test_effort_changes_blocks_and_ultracode_reviews_against_sources() -> None:
     calls: list[str] = []
-    r = _app(FakeEndpoint(calls), ollama_model_fast="rapido-1b", ollama_model_strong="forte-14b")
+    r = _app(FakeEndpoint(calls))
     text = "Uma frase com fatos. " * 1_000
-    r.summarize(text, effort="medio")
-    assert set(calls[:-1]) == {"rapido-1b"} and calls[-1] == "padrao-7b"
+    r.summarize(text, effort="baixo")
+    low_calls = len(calls)
     calls.clear()
-    r.summarize(text, effort="alto")
-    assert set(calls[:-1]) == {"padrao-7b"} and calls[-1] == "forte-14b"
-    r.close()
-
-
-def test_max_uses_strong_everywhere_and_ultracode_reviews_against_sources() -> None:
-    calls: list[str] = []
-    r = _app(FakeEndpoint(calls), ollama_model_fast="rapido-1b", ollama_model_strong="forte-14b")
-    text = "Uma frase com fatos. " * 1_000
     r.summarize(text, effort="max")
-    assert set(calls) == {"forte-14b"}
     max_calls = len(calls)
+    assert max_calls > low_calls  # blocos menores: mais trabalho no mesmo LLM
     calls.clear()
-    assert r.summarize(text, effort="ultracode") == "forte-14b: ok"
-    assert set(calls) == {"forte-14b"} and len(calls) == max_calls + 1
+    assert r.summarize(text, effort="ultracode") == "sessao: ok"
+    assert len(calls) == max_calls + 1 and calls[-1].startswith("Revise o RESUMO")
     r.close()
 
     prompts: list[str] = []
@@ -204,7 +172,7 @@ def test_summarize_skips_failed_parts_and_warns() -> None:
 
 def test_summarize_raises_when_every_part_fails() -> None:
     def broken(prompt: str, system: str | None) -> str:
-        raise WriterError("Ollama fora do ar")
+        raise WriterError("LLM fora do ar")
 
     r = _app(CallableWriter(broken))
     with pytest.raises(WriterError, match="fora do ar"):
@@ -247,33 +215,20 @@ def test_offline_refuses_remote_writer() -> None:
     with pytest.raises(WriterError, match="só aceita LLM local"):
         r.write("oi")
     r.close()
-    lan = _app(FakeEndpoint([], base_url="http://192.168.0.10:11434/v1"), offline=True)
-    assert lan.write("oi") == "padrao-7b: ok"
+    lan = _app(FakeEndpoint([], base_url="http://192.168.0.10:8080/v1"), offline=True)
+    assert lan.write("oi") == "sessao: ok"
     lan.close()
-
-
-def test_auto_writer_offline_ignores_remote_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JEV_CLAUD_LLM_BASE_URL", "https://api.exemplo.com/v1")
-    monkeypatch.setenv("JEV_CLAUD_LLM_MODEL", "algum")
-    assert isinstance(auto_writer(), OpenAICompatibleWriter)
-    assert auto_writer(local_only=True) is None  # o Ollama do conftest recusa a conexão
-    monkeypatch.setenv("JEV_CLAUD_LLM_BASE_URL", "http://127.0.0.1:1234/v1")
-    writer = auto_writer(local_only=True)
-    assert isinstance(writer, OpenAICompatibleWriter) and writer.base_url == "http://127.0.0.1:1234/v1"
-    monkeypatch.delenv("JEV_CLAUD_LLM_BASE_URL")
-    monkeypatch.setenv("OLLAMA_HOST", "https://ollama.exemplo.com")
-    assert auto_writer(local_only=True) is None
 
 
 @pytest.mark.parametrize(
     ("url", "local"),
     [
-        ("http://localhost:11434", True),
+        ("http://localhost:8080", True),
         ("http://app.localhost", True),
         ("http://127.0.0.1:9", True),
-        ("http://[::1]:11434", True),
+        ("http://[::1]:8080", True),
         ("http://10.0.0.5", True),
-        ("192.168.1.20:11434", True),
+        ("192.168.1.20:8080", True),
         ("https://api.openai.com/v1", False),
         ("http://8.8.8.8", False),
         ("http://localhost.exemplo.com", False),
