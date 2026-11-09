@@ -4,13 +4,14 @@ Detecta o que falta, explica para que serve e pergunta antes de instalar cada pe
 
 1. Python 3.10+                       (informativo)
 2. SDK do Jev (`typesafe-sdk`)        decisões tipadas pagas, quando houver chave
-3. Ollama + servidor + modelo         texto grátis na sua máquina
-4. Chave e orçamento do Jev           opcional; guardados em `config.json`
-5. Claude Code + skill TypeSafe       o agente que usa tudo isso
-6. Servidor MCP `jev-claud`           o Claude delega lotes ao Jev/Ollama e economiza tokens
-7. Hook no `~/.claude/settings.json`  saídas longas de testes e builds compactadas
-8. Plugin Jevin no Claude Code        skill e subagente explorador
-9. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
+3. Chave e orçamento do Jev           opcional; guardados em `config.json`
+4. Claude Code + skill TypeSafe       o agente que usa tudo isso
+5. Servidor MCP `jev-claud`           ferramentas que operam no LLM da sessão e economizam tokens
+6. Hook no `~/.claude/settings.json`  saídas longas de testes e builds compactadas
+7. Plugin Jevin no Claude Code        skill e subagente explorador
+8. Regra global no `~/.claude/CLAUDE.md` (atualizada quando muda de versão)
+
+Não há modelo local para instalar: o texto fica com o LLM da sessão em que o jev-claud roda.
 
 Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e `--check`
 (só verifica; código de saída 1 se faltar algo essencial).
@@ -28,7 +29,6 @@ import sqlite3
 import subprocess
 import sys
 import time
-import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,7 +38,6 @@ from jev_claud import mascot
 from jev_claud.compact import HOOK_MATCHER, hook_command
 from jev_claud.config import config_path, load_config, save_config
 from jev_claud.envvars import getenv
-from jev_claud.writers import DEFAULT_OLLAMA_MODEL, ollama_host
 
 REPO_URL = "https://github.com/thiago-lage/jev-claud"
 PACKAGE_SPEC = "jev-claud[jev]"  # versão lançada no PyPI
@@ -62,22 +61,22 @@ OLD_MARKETPLACE = "jev-claude"
 OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
-RULE_VERSION = 6
+RULE_VERSION = 7
 CLAUDE_RULE = f"""{RULE_START}
 <!-- versão {RULE_VERSION}: o `jev-claud setup` e o `jev-claud update` substituem este bloco inteiro -->
 ## Como trabalhar
 
 - Pedido de mudança em código: **implemente direto**. Edite os arquivos, rode os testes e
   mostre o resultado. Não devolva o código no chat para a pessoa colar, a não ser que ela peça.
-- Nunca delegue escrita ou edição de código ao Ollama/Jev: a qualidade da entrega é sua.
-  O agente principal planeja, interpreta evidências, edita e valida.
+- Nunca delegue escrita ou edição de código às ferramentas do jev-claud: a qualidade da entrega
+  é sua. O agente principal planeja, interpreta evidências, edita e valida.
 
 ## Quando o código que você escreve usa IA: Jev vs. LLM
 
 - Saída de IA que o **código consome para ramificar** (if/switch, roteamento, filtros, ranking,
   validação): use **TypeSafe Jev** (`choice`, `noul`, `score`) via `jev-claud`
   (`from jev_claud import JevClaud`). Não peça JSON a uma LLM para depois fazer parse.
-- Saída que **uma pessoa vai ler**: use **LLM** (`JevClaud.write`, Ollama local por padrão).
+- Saída que **uma pessoa vai ler**: use **LLM** (`JevClaud.write` com o `Writer` do app).
 - Regras conhecidas, cálculos e buscas exatas ficam em código puro.
 - Custo zero por padrão: o Jev é pago; só com orçamento explícito (`jev-claud setup`).
 - Ao integrar, leia https://docs.typesafe.ai/llms.txt (no Claude Code, use também a skill
@@ -94,13 +93,13 @@ CLAUDE_RULE = f"""{RULE_START}
 
 - Arquivo de dados grande (CSV, logs, listas) para classificar, ranquear ou resumir: ferramentas
   MCP `classify`, `rank`, `summarize_file` com o CAMINHO do arquivo, em vez de lê-lo.
-- O Ollama é o motor local do `summarize_file` e do `write`: use-o quando o volume justificar.
-  O resumo retorna `summary`, cobertura e `verification=unverified`. Confira afirmações
-  importantes no original com `search_file`/`read_evidence`; prefira diagnóstico determinístico para logs.
+- `summarize_file` e `write` usam o LLM desta sessão: por MCP sampling quando o host oferece;
+  senão devolvem `mode: "agent"` com os blocos ou a tarefa para você fazer (não há modelo local).
+  O resumo é `verification=unverified`: confira afirmações importantes no original com
+  `search_file`/`read_evidence`; prefira diagnóstico determinístico para logs.
 - Passe `effort`, com os mesmos níveis do seletor do Claude: `baixo` (triagem), `medio` (padrão),
-  `alto` ou `extra` (os detalhes importam), `max` (o melhor que o local consegue) e `ultracode`
-  (`max` mais revisão, contra parciais quando há vários blocos; não garante fidelidade).
-  Confira em `status` os modelos reais: os esforços podem usar o mesmo modelo.
+  `alto` ou `extra` (os detalhes importam), `max` e `ultracode` (`max` mais revisão contra os
+  parciais). Ele controla só o tamanho dos blocos e a profundidade, nunca o modelo.
 - Na sessão em nuvem as ferramentas MCP não existem: leia com `offset`/`limit`.
 - Código-fonte que você vai editar: leia você mesmo (resumo não serve para editar).
 - Saída de teste ou build com o rodapé `[jev-claud] saída compactada`: a saída completa está no
@@ -184,14 +183,6 @@ class System:
 
     def remove_tree(self, path: Path) -> None:
         shutil.rmtree(path, ignore_errors=True)
-
-    def ollama_models(self) -> list[str] | None:
-        try:
-            with urllib.request.urlopen(f"{ollama_host()}/api/tags", timeout=1) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        except (OSError, ValueError):
-            return None
-        return [str(m.get("name", "")) for m in data.get("models") or [] if isinstance(m, dict)]
 
     def sdk_installed(self) -> bool:
         return importlib.util.find_spec("typesafe_sdk") is not None
@@ -479,14 +470,11 @@ class Setup:
         *,
         system: System | None = None,
         ui: UI | None = None,
-        ollama_model: str | None = None,
         claude_md: Path | None = None,
         version: str = "",
     ) -> None:
         self.sys = system or System()
         self.ui = ui or UI()
-        stored = load_config().get("ollama_model")
-        self.model = ollama_model or (str(stored) if stored else None) or DEFAULT_OLLAMA_MODEL
         self.claude_md = claude_md or self.sys.home / ".claude" / "CLAUDE.md"
         self.claude_settings = self.claude_md.parent / "settings.json"
         self.version = version
@@ -504,7 +492,7 @@ class Setup:
             if not ok and step.essential:
                 report.essential_missing.append(step.title)
         if mode != "check":
-            save_config({"setup_version": self.version or "dev", "ollama_model": self._model_to_store()})
+            save_config({"setup_version": self.version or "dev"})
         self._summary(report, mode)
         return report
 
@@ -541,7 +529,7 @@ class Setup:
             self.ui.note(
                 '  jev-claud ask "Fui cobrado duas vezes" --choice "Setor?" -o financeiro -o suporte'
             )
-            self.ui.note('  jev-claud write "Diga olá ao cliente em uma frase"')
+            self.ui.note("  jev-claud diagnose arquivo.log   (evidências de uma falha, sem LLM)")
             if self.sys.which("claude") or self.sys.exists(self._claude_path()):
                 self.ui.note("  claude      (abra o Claude Code em qualquer projeto)")
         else:
@@ -550,9 +538,6 @@ class Setup:
             hint = "jev-claud setup" if mode == "check" else "jev-claud setup  (quando quiser)"
             self.ui.note(f"Rode de novo: {hint}")
         self.ui.note(f"Configuração: {config_path()}")
-
-    def _model_to_store(self) -> str | None:
-        return None if self.model == DEFAULT_OLLAMA_MODEL else self.model
 
     # -- lista de passos -----------------------------------------------------------
 
@@ -573,29 +558,6 @@ class Setup:
                 essential=False,
                 default_yes=not global_python,
                 auto=not global_python,
-            ),
-            Step(
-                "ollama",
-                "Ollama (LLM local e grátis para texto)",
-                self._check_ollama,
-                self._install_ollama,
-                self._ollama_question(),
-            ),
-            Step(
-                "ollama_server",
-                "Servidor do Ollama",
-                self._check_server,
-                self._start_server,
-                "Iniciar o Ollama agora?",
-                requires=("ollama",),
-            ),
-            Step(
-                "ollama_model",
-                f"Modelo de texto ({self.model})",
-                self._check_model,
-                self._pull_model,
-                f"Baixar o modelo {self.model} (~2 GB, uma vez só)?",
-                requires=("ollama_server",),
             ),
             Step(
                 "jev_key",
@@ -710,89 +672,6 @@ class Setup:
             self.ui.warn("Prefira o instalador oficial, que usa um ambiente isolado (veja o README).")
         return self.sys.run([self.sys.python, "-m", "pip", "install", "--upgrade", "typesafe-sdk"]) == 0
 
-    # -- Ollama --------------------------------------------------------------------
-
-    def _ollama_path(self) -> str | None:
-        found = self.sys.which("ollama")
-        if found:
-            return found
-        candidates: list[Path] = []
-        if self.sys.platform == "win32":
-            local = self.sys.env.get("LOCALAPPDATA")
-            if local:
-                candidates.append(Path(local) / "Programs" / "Ollama" / "ollama.exe")
-        elif self.sys.platform == "darwin":
-            candidates += [
-                Path("/opt/homebrew/bin/ollama"),
-                Path("/usr/local/bin/ollama"),
-                Path("/Applications/Ollama.app/Contents/Resources/ollama"),
-            ]
-        else:
-            candidates += [Path("/usr/local/bin/ollama"), Path("/usr/bin/ollama")]
-        return next((str(path) for path in candidates if self.sys.exists(path)), None)
-
-    def _ollama_question(self) -> str:
-        if self.sys.platform == "win32":
-            return "Instalar o Ollama via winget? (aceita os termos do pacote; licença MIT)"
-        if self.sys.platform == "darwin":
-            return "Instalar o Ollama via Homebrew?"
-        return "Instalar o Ollama com o script oficial (ollama.com/install.sh, pede sudo)?"
-
-    def _check_ollama(self) -> tuple[bool, str]:
-        path = self._ollama_path()
-        return (True, path) if path else (False, "texto grátis precisa de uma LLM local")
-
-    def _install_ollama(self) -> bool:
-        if self.sys.platform == "win32":
-            if not self.sys.which("winget"):
-                self.ui.warn("winget não encontrado. Baixe em https://ollama.com/download")
-                return False
-            command = [
-                "winget", "install", "-e", "--id", "Ollama.Ollama", "--silent",
-                "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity",
-            ]  # fmt: skip
-        elif self.sys.platform == "darwin":
-            if not self.sys.which("brew"):
-                self.ui.warn("Homebrew não encontrado. Baixe em https://ollama.com/download")
-                return False
-            command = ["brew", "install", "ollama"]
-        else:
-            command = ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
-        return self.sys.run(command) == 0
-
-    def _check_server(self) -> tuple[bool, str]:
-        models = self.sys.ollama_models()
-        return (True, ollama_host()) if models is not None else (False, "não está rodando")
-
-    def _start_server(self) -> bool:
-        path = self._ollama_path()
-        if path is None:
-            return False
-        app = Path(path).parent / "ollama app.exe"
-        if self.sys.platform == "win32" and self.sys.exists(app):
-            self.sys.spawn([str(app)])
-        elif self.sys.platform == "darwin" and self.sys.exists(Path("/Applications/Ollama.app")):
-            self.sys.spawn(["open", "-a", "Ollama"])
-        else:
-            self.sys.spawn([path, "serve"])
-        for _ in range(30):
-            if self.sys.ollama_models() is not None:
-                return True
-            self.sys.sleep(1)
-        self.ui.warn("O servidor não respondeu em 30 s.")
-        return False
-
-    def _check_model(self) -> tuple[bool, str]:
-        models = self.sys.ollama_models() or []
-        wanted = self.model if ":" in self.model else f"{self.model}:latest"
-        if wanted in models or self.model in models:
-            return True, "baixado"
-        return False, "não baixado"
-
-    def _pull_model(self) -> bool:
-        path = self._ollama_path()
-        return path is not None and self.sys.run([path, "pull", self.model]) == 0
-
     # -- chave do Jev ----------------------------------------------------------------
 
     def _check_key(self) -> tuple[bool, str]:
@@ -890,7 +769,7 @@ class Setup:
         old, _ = self.sys.capture([path, "mcp", "get", OLD_MCP_NAME])
         if old == 0:
             return False, f"registrado com o nome antigo ({OLD_MCP_NAME})"
-        return False, "o Claude ainda não consegue delegar trabalho ao Jev e ao Ollama"
+        return False, "o Claude ainda não tem as ferramentas do jev-claud"
 
     def _plugin_mcp(self, path: str) -> bool:
         """O plugin Jevin trouxe o servidor MCP e ele conecta (o `jev-claud` está no PATH)."""
@@ -1398,8 +1277,8 @@ def savings_footer() -> str | None:
         store.close()
 
 
-def run_setup(mode: Mode = "interactive", *, ollama_model: str | None = None, version: str = "") -> int:
-    report = Setup(ollama_model=ollama_model, version=version).run(mode)
+def run_setup(mode: Mode = "interactive", *, version: str = "") -> int:
+    report = Setup(version=version).run(mode)
     return 0 if report.ok else 1
 
 

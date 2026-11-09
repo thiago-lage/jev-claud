@@ -1,7 +1,7 @@
 """Linha de comando do jev-claud.
 
-Subcomandos: setup, mcp, compact, run, hook, rule, doctor (ou status), ask, write, models, spend,
-update, cache.
+Subcomandos: setup, mcp, compact, run, hook, rule, doctor (ou status), ask, models, spend,
+update, cache. Texto e resumos ficam com o LLM da sessão (servidor MCP), não com a CLI.
 """
 
 from __future__ import annotations
@@ -57,21 +57,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="jev-claud",
-        description="Decisões tipadas para o código (Jev) e texto para pessoas (LLM). Custo zero por padrão.",
+        description=(
+            "Decisões tipadas para o código (Jev) e evidências para o agente; o texto fica com o LLM "
+            "da sessão. Custo zero por padrão."
+        ),
     )
     parser.add_argument("--version", action="version", version=f"jev-claud {__version__}")
     sub = parser.add_subparsers()
 
-    setup = sub.add_parser("setup", help="assistente que instala e configura tudo (Ollama, Claude Code, Jev)")
+    setup = sub.add_parser("setup", help="assistente que instala e configura tudo (Claude Code, plugin, Jev)")
     setup_mode = setup.add_mutually_exclusive_group()
     setup_mode.add_argument("-y", "--yes", action="store_true", help="aceita tudo que não exige digitar nada")
     setup_mode.add_argument(
         "--check", action="store_true", help="só verifica; sai com 1 se faltar algo essencial"
     )
-    setup.add_argument("--model", help="modelo do Ollama para texto (padrão: llama3.2)")
     setup.set_defaults(standalone=_setup)
 
-    mcp = sub.add_parser("mcp", help="servidor MCP (stdio) para o Claude delegar decisões e textos")
+    mcp = sub.add_parser("mcp", help="servidor MCP (stdio): ferramentas que operam no LLM da sessão")
     mcp.set_defaults(standalone=_mcp)
 
     compact = sub.add_parser(
@@ -121,11 +123,6 @@ def _parser() -> argparse.ArgumentParser:
     ask.add_argument("--json", action="store_true")
     ask.set_defaults(handler=_ask)
 
-    write = sub.add_parser("write", help="gera texto para uma pessoa ler (LLM)")
-    write.add_argument("prompt")
-    write.add_argument("--system")
-    write.set_defaults(handler=_write)
-
     models = sub.add_parser("models", help="lista os modelos Jev da conta")
     models.set_defaults(handler=_models)
 
@@ -158,7 +155,6 @@ def _doctor(r: JevClaud, args: argparse.Namespace) -> int:
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return 0
     jev, budget = status["jev"], status["budget"]
-    writer = r.writer
     print(f"jev-claud {__version__}")
     if status["offline"]:
         print("Modo offline: ligado (JEV_CLAUD_OFFLINE=1; nada sai da máquina, custo zero)")
@@ -177,26 +173,14 @@ def _doctor(r: JevClaud, args: argparse.Namespace) -> int:
         f"({budget['input_tokens_this_month']} tokens, {budget['calls_this_month']} chamadas)"
     )
     print("\nTexto (uma pessoa lê):")
-    print(f"  LLM          : {_describe_writer(writer)}")
-    if writer is not None:
-        rapido, padrao, forte = r.tier_models().values()
-        print(f"  esforço      : rápido {rapido} | padrão {padrao} | forte {forte}")
-        if rapido == padrao == forte:
-            print("  atenção      : todos os esforços usam o mesmo modelo; mais esforço aumenta o trabalho.")
+    print("  LLM          : o da sessão que usa o jev-claud (MCP sampling; sem ele, o próprio agente)")
+    print("  modelo local : nenhum (não há backend externo nem modelo para configurar)")
     if r.jev is not None:
         print(f"  estratégia   : {r.strategy}  (offline aceito com confiança >= {r.cascade_accept:.2f})")
     print(f"\nCache: {status['cache']['entries']} decisões em {status['cache']['path']}")
     _print_routing(r)
     _print_savings(r)
     return 0
-
-
-def _describe_writer(writer: Any) -> str:
-    if writer is None:
-        return "nenhuma  (rode o Ollama ou defina JEV_CLAUD_LLM_BASE_URL + JEV_CLAUD_LLM_MODEL)"
-    model = getattr(writer, "model", "")
-    base = getattr(writer, "base_url", "")
-    return f"{writer.name} {model} {base}".strip()
 
 
 def _ask(r: JevClaud, args: argparse.Namespace) -> int:
@@ -234,11 +218,6 @@ def _ask(r: JevClaud, args: argparse.Namespace) -> int:
     return 0
 
 
-def _write(r: JevClaud, args: argparse.Namespace) -> int:
-    print(r.write(args.prompt, system=args.system))
-    return 0
-
-
 def _models(r: JevClaud, args: argparse.Namespace) -> int:
     if r.jev is None:
         raise JevClaudError("Jev indisponível: defina TYPESAFE_API_KEY e instale jev-claud[jev].")
@@ -259,12 +238,11 @@ def _spend(r: JevClaud, args: argparse.Namespace) -> int:
 
 
 COMMANDS = (
-    ("setup", "instala e configura tudo (Ollama, Claude Code, plugin)"),
+    ("setup", "instala e configura tudo (Claude Code, plugin, regra)"),
     ("doctor", "o que está ativo, orçamento e cache"),
     ("spend", "gastos e economia do mês"),
     ("diagnose arquivo.log", "evidências de falhas para o agente investigar e corrigir"),
     ('ask "texto" --noul "pergunta?"', "decisão tipada pela linha de comando"),
-    ('write "instrução"', "texto com a LLM local"),
     ("update", "atualiza o jev-claud, o SDK do Jev, o plugin e a regra"),
 )
 
@@ -316,7 +294,7 @@ def _print_routing(r: JevClaud) -> None:
 
 def _setup(args: argparse.Namespace) -> int:
     mode: Mode = "yes" if args.yes else "check" if args.check else "interactive"
-    return run_setup(mode, ollama_model=args.model, version=__version__)
+    return run_setup(mode, version=__version__)
 
 
 def _refresh(args: argparse.Namespace) -> int:

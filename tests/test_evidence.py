@@ -170,7 +170,7 @@ def test_mcp_end_to_end_diagnose_read_and_validate_new_log(tmp_path: Path) -> No
         server.close()
 
 
-def test_cli_diagnosis_is_available_without_ollama(
+def test_cli_diagnosis_is_available_without_any_llm(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     log = tmp_path / "build.log"

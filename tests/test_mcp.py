@@ -209,7 +209,7 @@ def test_rank_returns_only_top_k(server: Server, tmp_path: Path) -> None:
     assert result["top"][0]["text"] == "como cancelar a assinatura"
 
 
-def test_write_uses_local_llm(server: Server, llm: Recorder) -> None:
+def test_write_uses_the_session_llm(server: Server, llm: Recorder) -> None:
     text = payload(
         call(server, "write", {"prompt": "Diga olá", "context": {"cliente": "Ana"}, "system": "Breve."})
     )
@@ -272,11 +272,212 @@ def test_effort_is_in_tool_schemas() -> None:
     assert "effort" in schemas["write"]
 
 
-def test_status_reports_backends(server: Server) -> None:
+def test_status_reports_llm_cache_and_activity(server: Server, tmp_path: Path) -> None:
+    file = tmp_path / "nota.txt"
+    file.write_text("Reunião: decidimos lançar na sexta.", encoding="utf-8")
+    payload(call(server, "summarize_file", {"path": str(file)}))
     result = payload(call(server, "status", {}))
-    assert result["jev"]["enabled"] is False and result["writer"] == "callable"
-    assert result["offline"] is False
-    assert result["effort_models"] == {"rapido": "callable", "padrao": "callable", "forte": "callable"}
+    assert result["jev"]["enabled"] is False and result["offline"] is False
+    assert result["llm"]["mode"] == "writer" and result["llm"]["writer"] == "callable"
+    assert result["llm"]["sampling"] is False
+    assert result["summary_cache"] == {"entries": 1, "scope": "server_session", "limit": 16}
+    assert result["recent_activity"][-1]["tool"] == "summarize_file"
+    assert "writer" not in result and "effort_models" not in result
+
+
+# -- modo agente: host sem MCP sampling --------------------------------------------------------
+
+
+@pytest.fixture
+def agent() -> Server:
+    srv = Server(lambda: JevClaud(store=":memory:"))
+    initialize(srv, {"roots": {"listChanged": True}, "elicitation": {}})  # como o Claude Code
+    yield srv  # type: ignore[misc]
+    srv.close()
+
+
+def initialize(server: Server, capabilities: dict[str, Any]) -> dict[str, Any]:
+    response = server.handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 0,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": capabilities,
+                "clientInfo": {"name": "host-teste", "version": "1.0"},
+            },
+        }
+    )
+    assert response is not None
+    return response["result"]
+
+
+def test_agent_mode_status_names_the_host(agent: Server) -> None:
+    llm = payload(call(agent, "status", {}))["llm"]
+    assert llm["mode"] == "agent" and llm["sampling"] is False and llm["writer"] is None
+    assert llm["host"] == {"name": "host-teste", "version": "1.0"}
+    assert "mode=agent" in llm["note"]
+
+
+def test_agent_mode_write_returns_the_task(agent: Server) -> None:
+    result = payload(call(agent, "write", {"prompt": "Diga olá", "system": "Breve.", "effort": "baixo"}))
+    assert result["mode"] == "agent" and result["task"] == {
+        "prompt": "Diga olá",
+        "max_tokens": 400,
+        "system": "Breve.",
+    }
+    assert "Nenhum outro modelo" in result["next_action"]
+
+
+def test_agent_mode_summary_pages_blocks_and_caches_what_the_agent_wrote(
+    agent: Server, tmp_path: Path
+) -> None:
+    file = tmp_path / "grande.txt"
+    file.write_text("Uma frase com fatos. " * 3_000, encoding="utf-8")  # ~63 mil caracteres
+    args = {"path": str(file), "max_chars": 100_000, "effort": "alto"}
+    first = payload(call(agent, "summarize_file", args))
+    assert first["mode"] == "agent" and first["summary"] is None
+    assert first["plan"] == {"chunk_chars": 4_000, "overlap_chars": 500, "verify": False}
+    assert first["blocks"][0]["n"] == 1 and first["next_block"] == len(first["blocks"]) + 1
+    assert sum(len(b["text"]) for b in first["blocks"]) <= 24_000
+    pages = [first]
+    while pages[-1]["next_block"]:
+        pages.append(payload(call(agent, "summarize_file", {**args, "block": pages[-1]["next_block"]})))
+    numbers = [b["n"] for page in pages for b in page["blocks"]]
+    assert numbers == list(range(1, first["blocks_total"] + 1))
+    assert call(agent, "summarize_file", {**args, "block": 999})["isError"] is True
+
+    saved = payload(call(agent, "summarize_file", {**args, "save_summary": "  Resumo do agente.  "}))
+    assert saved["saved"] is True and saved["summary_cache"]["entries"] == 1
+    again = payload(call(agent, "summarize_file", args))
+    assert again["summary"] == "Resumo do agente." and again["cached"] is True
+    other_effort = payload(call(agent, "summarize_file", {**args, "effort": "baixo"}))
+    assert other_effort["mode"] == "agent"  # outro esforço, outro resumo
+    assert call(agent, "summarize_file", {**args, "save_summary": " "})["isError"] is True
+
+
+def test_agent_mode_ultracode_asks_for_a_review(agent: Server, tmp_path: Path) -> None:
+    file = tmp_path / "nota.txt"
+    file.write_text("Reunião: decidimos lançar na sexta.", encoding="utf-8")
+    result = payload(call(agent, "summarize_file", {"path": str(file), "effort": "ultracode"}))
+    assert result["blocks_total"] == 1 and result["next_block"] is None
+    assert any("Revise o resumo final" in step for step in result["instructions"])
+
+
+def test_agent_mode_returns_uncertain_items_to_the_agent(agent: Server) -> None:
+    result = payload(
+        call(
+            agent,
+            "classify",
+            {
+                "items": ["fui cobrado duas vezes", "bom dia"],
+                "instructions": "Setor?",
+                "options": {"financeiro": "cobrança, fatura", "suporte": "erro, bug"},
+            },
+        )
+    )
+    assert result["llm"] == "agent" and result["uncertain_total"] >= 1
+    assert "classifique você" in result["next_action"]
+    decided = payload(
+        call(
+            agent,
+            "decide",
+            {"state": "bom dia", "questions": {"q": {"type": "noul", "instructions": "Urgente?"}}},
+        )
+    )
+    assert decided["needs_agent_review"] is True and "decida você" in decided["next_action"]
+
+
+# -- LLM da sessão ---------------------------------------------------------------------------
+
+
+class JsonLLM:
+    """LLM da sessão que responde JSON, como o host responderia a um sampling."""
+
+    def __init__(self, answer: Any) -> None:
+        self.answer = answer
+        self.prompts: list[str] = []
+
+    def __call__(self, prompt: str, system: str | None) -> str:
+        self.prompts.append(prompt)
+        answer = self.answer(prompt) if callable(self.answer) else self.answer
+        return "Claro! " + json.dumps(answer, ensure_ascii=False)
+
+
+def _session(answer: Any) -> tuple[Server, JsonLLM]:
+    llm = JsonLLM(answer)
+    return Server(lambda: JevClaud(store=":memory:", writer=CallableWriter(llm))), llm
+
+
+def test_session_llm_resolves_uncertain_classifications() -> None:
+    server, llm = _session({"1": "suporte", "2": "inexistente"})
+    result = payload(
+        call(
+            server,
+            "classify",
+            {
+                "items": ["fui cobrado duas vezes na fatura da cobrança", "bom dia", "olá"],
+                "instructions": "Setor?",
+                "options": {"financeiro": "cobrança, fatura", "suporte": "erro, bug"},
+            },
+        )
+    )
+    items = {item["i"]: item for item in result["items"]}
+    assert items[1]["label"] == "suporte" and items[1]["confidence"] is None
+    assert items[2]["label"] is None  # rótulo fora da lista: continua incerto
+    assert result["sources"]["session"] == 1 and result["llm"] == "writer"
+    assert "1: bom dia" in llm.prompts[0] and "- financeiro: cobrança, fatura" in llm.prompts[0]
+    server.close()
+
+
+def test_session_llm_answers_uncertain_decisions() -> None:
+    server, _ = _session({"urgente": "sim", "setor": "suporte", "nivel": "alto", "extra": "talvez"})
+    result = payload(
+        call(
+            server,
+            "decide",
+            {
+                "state": "bom dia",
+                "questions": {
+                    "urgente": {"type": "noul", "instructions": "Pede ação imediata?"},
+                    "setor": {
+                        "type": "choice",
+                        "instructions": "Setor?",
+                        "options": {"financeiro": None, "suporte": None},
+                    },
+                    "nivel": {
+                        "type": "score",
+                        "instructions": "Gravidade?",
+                        "levels": ["baixo", "médio", "alto"],
+                    },
+                    "extra": {"type": "noul", "instructions": "Elogio?"},
+                },
+            },
+        )
+    )
+    decisions = result["decisions"]
+    assert decisions["urgente"]["value"] is True and decisions["urgente"]["source"] == "session"
+    assert decisions["setor"]["value"] == "suporte" and "candidate" not in decisions["setor"]
+    assert decisions["nivel"]["value"] == 2 and decisions["nivel"]["level"] == 2
+    assert sorted(result["session_resolved"]) == ["nivel", "setor", "urgente"]
+    assert result["review_questions"] == ["extra"] and result["needs_agent_review"] is True
+    server.close()
+
+
+def test_session_llm_reorders_rank_candidates() -> None:
+    server, llm = _session({"top": [3, 3, 99, 0]})
+    items = ["receita de bolo", "como cancelar a assinatura", "planos e preços", "cancelamento e reembolso"]
+    result = payload(call(server, "rank", {"items": items, "query": "cancelar assinatura", "top_k": 2}))
+    assert [hit["i"] for hit in result["top"]] == [3, 0]
+    assert result["source"] == "session" and result["needs_agent_review"] is False
+    assert "Consulta: cancelar assinatura" in llm.prompts[0]
+    server.close()
+
+
+def test_session_llm_without_json_keeps_the_offline_answer(server: Server) -> None:
+    result = payload(call(server, "rank", {"items": ["a b", "c d", "a"], "query": "a", "top_k": 1}))
+    assert result["source"] != "session" and result["needs_agent_review"] is True
 
 
 # -- loop stdio ------------------------------------------------------------------------------
@@ -302,3 +503,89 @@ def test_serve_loop_over_bytes(llm: Recorder) -> None:
     assert responses[1]["result"]["content"][0]["text"] == "resposta 1"
     assert responses[2]["error"]["code"] == -32700
     assert llm.calls[0][0] == "olá ç"
+
+
+def _frames(*messages: dict[str, Any]) -> bytes:
+    return b"".join(json.dumps(m, ensure_ascii=False).encode("utf-8") + b"\n" for m in messages)
+
+
+def _sampling_answer(request_id: str, text: str) -> dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {"role": "assistant", "content": {"type": "text", "text": text}, "model": "modelo-do-host"},
+    }
+
+
+def test_serve_uses_mcp_sampling_when_the_host_offers_it() -> None:
+    raw = _frames(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {"sampling": {}}},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "write", "arguments": {"prompt": "Oi"}},
+        },
+        {"jsonrpc": "2.0", "id": 3, "method": "ping"},  # chega enquanto o servidor espera o sampling
+        _sampling_answer("jev-claud-1", "  Olá da sessão  "),
+        {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "status", "arguments": {}}},
+    )
+    out = io.BytesIO()
+    assert serve(io.BytesIO(raw), out, Server(lambda: JevClaud(store=":memory:"))) == 0
+    sent = [json.loads(line) for line in out.getvalue().decode("utf-8").splitlines()]
+    request = sent[1]
+    assert request["method"] == "sampling/createMessage" and request["id"] == "jev-claud-1"
+    assert request["params"]["messages"][0]["content"] == {"type": "text", "text": "Oi"}
+    assert request["params"]["maxTokens"] == 800 and request["params"]["includeContext"] == "none"
+    assert [m.get("id") for m in sent[2:]] == [2, 3, 4]
+    assert sent[2]["result"]["content"][0]["text"] == "Olá da sessão"
+    llm = json.loads(sent[4]["result"]["content"][0]["text"])["llm"]
+    assert llm["mode"] == "session_sampling" and llm["model"] == "modelo-do-host"
+
+
+def test_sampling_refused_by_the_host_becomes_a_tool_error() -> None:
+    raw = _frames(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {"sampling": {}}},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "write", "arguments": {"prompt": "Oi"}},
+        },
+        {"jsonrpc": "2.0", "id": "jev-claud-1", "error": {"code": -1, "message": "usuário recusou"}},
+    )
+    out = io.BytesIO()
+    serve(io.BytesIO(raw), out, Server(lambda: JevClaud(store=":memory:")))
+    result = json.loads(out.getvalue().decode("utf-8").splitlines()[-1])["result"]
+    assert result["isError"] is True and "usuário recusou" in result["content"][0]["text"]
+
+
+def test_sampling_without_answer_before_eof_is_an_error() -> None:
+    raw = _frames(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {"sampling": {}}},
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "write", "arguments": {"prompt": "Oi"}},
+        },
+    )
+    out = io.BytesIO()
+    serve(io.BytesIO(raw), out, Server(lambda: JevClaud(store=":memory:")))
+    result = json.loads(out.getvalue().decode("utf-8").splitlines()[-1])["result"]
+    assert result["isError"] is True and "fechou a conexão" in result["content"][0]["text"]

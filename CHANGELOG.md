@@ -3,7 +3,55 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [1.0.0] - 2026-11-09
+
+O jev-claud passa a operar **só dentro do LLM da sessão** em que está instalado: sem backend de
+texto externo, sem modelo local e sem nada para baixar. A LLM local deixa de ser um passo
+essencial do setup, que não trava mais o terminal nem a skill.
+
+### Removido (mudança incompatível)
+
+- **O backend de LLM local** e tudo o que dependia dele: a classe de writer dedicada, a detecção
+  e o teste de saúde do servidor em `localhost:11434`, os passos do `jev-claud setup` que
+  instalavam o programa, iniciavam o servidor e baixavam o modelo (~2 GB), a opção
+  `jev-claud setup --model` e a chave de modelo no `config.json` (descartada na próxima gravação).
+- **A configuração de modelos por esforço**: as camadas `rapido`, `padrao` e `forte`, o
+  `JevClaud.write(tier=...)`, `JevClaud.tier_models()`, `JevClaud.writer_for()`, `WRITE_TIER` e
+  os campos `part_tier`/`final_tier` de `EffortPlan`, além das variáveis de ambiente do modelo
+  padrão, rápido e forte e do host do servidor local.
+- **A detecção de LLM de texto pelo ambiente**: `auto_writer`, `JEV_CLAUD_LLM_BASE_URL`,
+  `JEV_CLAUD_LLM_MODEL` e `JEV_CLAUD_LLM_API_KEY`. `JevClaud(writer=...)` agora tem padrão `None`
+  (o valor `"auto"` não existe mais); passe um `CallableWriter` ou `OpenAICompatibleWriter`.
+- **`jev-claud write`** na CLI: no terminal, quem escreve é o próprio agente.
+
+### Adicionado
+
+- **MCP sampling.** Quando o host declara `sampling` no `initialize`, o servidor pede o texto
+  ao LLM da sessão com `sampling/createMessage` (`SamplingWriter`): `write` e `summarize_file`
+  voltam prontos, os itens incertos de `classify` e as perguntas incertas de `decide` são
+  respondidos pela sessão, e `rank` reordena os melhores candidatos. O stdio passou a ter os
+  dois sentidos (`Channel`); mensagens que chegam durante um pedido esperam na fila.
+- **Modo agente**, o fallback quando o host não oferece sampling (o Claude Code 2.1, por
+  exemplo, só declara `roots` e `elicitation`): as ferramentas devolvem `mode: "agent"` com o
+  trabalho para o próprio agente. `summarize_file` pagina os blocos do esforço (`block`,
+  `next_block`, até ~24 mil caracteres por resposta) com o roteiro em `instructions`, e
+  `save_summary` grava no cache o resumo que o agente escreveu. `write` devolve a `task`;
+  `classify` e `decide` devolvem os incertos com `next_action`.
+- `status` mostra o LLM ativo (`llm.mode`: `session_sampling`, `agent` ou `writer`), o host, o
+  modelo informado pelo host, o cache de resumos e a atividade do servidor.
+- `summary_blocks()` e `render_context()` em `jev_claud.core`; `WRITE_TOKENS` em `jev_claud.effort`.
+
+### Alterado
+
+- `effort` (`baixo` a `ultracode`) controla só o tamanho dos blocos, a sobreposição e a
+  profundidade da junção (e, em `write`, o limite da resposta: 400 a 2.000 tokens). Não há
+  seletor de modelo próprio.
+- `jev-claud setup` não tem mais passo essencial além do Python: `--check` sai com 0 numa
+  máquina sem nenhum modelo instalado.
+- Regra global versão 7 e skill `jev` revisada: o texto fica com o LLM da sessão, o modo agente
+  explicado e a restrição às sessões locais removida (as ferramentas funcionam onde o pacote
+  estiver instalado).
+- O cache de resumos do MCP não depende mais dos modelos: a chave é o conteúdo, o foco e o esforço.
 
 ### Documentação
 
@@ -84,10 +132,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ### Alterado
 
-- Regra global versão 5: o Ollama é o motor grátis do `summarize_file` e do `write` para todo
+- Regra global versão 5: a LLM local é o motor grátis do `summarize_file` e do `write` para todo
   texto longo que não seja código a editar, com os níveis de esforço de `baixo` a `ultracode`, e
   as ferramentas MCP não existem nas sessões na nuvem. Código continua sempre com o Claude.
-- Skill `jev`: o mesmo destaque para o Ollama.
+- Skill `jev`: o mesmo destaque para a LLM local.
 
 ## [0.10.0] - 2026-10-15
 
@@ -98,11 +146,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
   revisão do resumo final contra os resumos parciais, que remove o que não estiver apoiado neles.
   Aceita também `xhigh`, `máx` e `máximo`.
 - README e skill dizem onde o esforço local e o modo offline funcionam: neste computador e no
-  Remote Control, não nas sessões na nuvem (lá não há o MCP nem o Ollama).
+  Remote Control, não nas sessões na nuvem (lá não há o MCP nem a LLM local).
 - **Esforço na camada local (`baixo`, `medio`, `alto`).** `summarize_file` e `write` (MCP) e
   `JevClaud.summarize`/`JevClaud.write(tier=...)` (biblioteca) quebram o trabalho entre modelos
-  do Ollama: blocos no modelo rápido (`JEV_CLAUD_OLLAMA_MODEL_FAST`), junção no padrão ou no forte
-  (`JEV_CLAUD_OLLAMA_MODEL_STRONG`). Sem esses modelos, tudo usa o padrão.
+  da LLM local: blocos no modelo rápido, junção no padrão ou no forte (cada um numa variável
+  própria). Sem esses modelos, tudo usa o padrão.
 - **Modo offline estrito (`JEV_CLAUD_OFFLINE=1`).** O Jev nunca é chamado, mesmo com orçamento,
   e o texto só vai a uma LLM nesta máquina ou na rede local. `status` e `jev-claud doctor` mostram
   o modo e o modelo de cada esforço.
@@ -291,9 +339,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ### Corrigido
 
-- A regra global podia levar o Claude Code a devolver código no chat ou delegar "rascunhos" ao
-  Ollama em vez de implementar. A regra (versão 2) e as instruções do MCP agora dizem para
-  implementar direto e nunca usar o Ollama/Jev para código. O `setup` substitui a versão antiga.
+- A regra global podia levar o Claude Code a devolver código no chat ou delegar "rascunhos" à
+  LLM local em vez de implementar. A regra (versão 2) e as instruções do MCP agora dizem para
+  implementar direto e nunca usar a LLM local ou o Jev para código. O `setup` substitui a versão antiga.
 
 ## [0.3.1] - 2026-10-15
 
@@ -308,7 +356,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 ### Adicionado
 
 - Servidor MCP (`jev-claude mcp`, sem dependências): o Claude Code delega trabalho em lote ao
-  Jev e ao Ollama local com as ferramentas `decide`, `classify`, `rank`, `summarize_file`,
+  Jev e à LLM local com as ferramentas `decide`, `classify`, `rank`, `summarize_file`,
   `write` e `status`. Os dados volumosos são lidos localmente e não entram no contexto do Claude.
 - `jev-claude setup` registra o servidor MCP no Claude Code (`claude mcp add -s user`).
 - `python -m jev_claude`.
@@ -318,7 +366,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 ### Adicionado
 
 - `jev-claude setup`: assistente no terminal, no estilo do Claude Code, que detecta e instala
-  (com confirmação) Ollama + servidor + modelo, SDK do Jev, Claude Code, skill TypeSafe e a regra
+  (com confirmação) a LLM local (servidor e modelo), SDK do Jev, Claude Code, skill TypeSafe e a regra
   global no `~/.claude/CLAUDE.md`. Modos `--yes` e `--check`. Abre sozinho no primeiro `jev-claude`.
 - Instaladores de uma linha: `install.ps1` (Windows) e `install.sh` (macOS/Linux), com ambiente
   isolado em `~/.local/share/jev-claude` e comando em `~/.local/bin`.
@@ -335,7 +383,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 ### Adicionado
 
 - `JevClaude.decide/ask/when/switch/rank` para decisões tipadas (Choice, Noul, Score) via TypeSafe Jev.
-- `JevClaude.write` para texto livre via LLM (Ollama, endpoint compatível com OpenAI, ou função).
+- `JevClaude.write` para texto livre via LLM (local, endpoint compatível com OpenAI, ou função).
 - Backend offline gratuito (heurística lexical) para custo zero, testes e fallback.
 - Cache SQLite de decisões, livro-caixa mensal e orçamento com teto (`JEV_CLAUDE_BUDGET_USD`, padrão 0).
 - Resolução automática de modelo: `latest`, `preview`, `newest` ou versão fixa.

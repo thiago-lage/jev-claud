@@ -6,8 +6,8 @@ Ajuda com o plugin **Jevin** e com o pacote **jev-claud**.
 
 1. **Atualize:** `jev-claud update` e depois `jev-claud setup`. No Claude Code, atualize o
    plugin pelo `/plugin`, no marketplace `jev-claud`.
-2. **Veja o que está ativo:** `jev-claud doctor` mostra a versão, o Jev, o Ollama, o
-   orçamento e o cache. `jev-claud setup --check` lista o que falta sem instalar nada.
+2. **Veja o que está ativo:** `jev-claud doctor` mostra a versão, o Jev, o
+   orçamento e o cache; a ferramenta MCP `status` mostra o LLM da sessão em uso. `jev-claud setup --check` lista o que falta sem instalar nada.
 3. **Consulte a documentação:**
    - [Plugin Jevin](plugin/README.md): instalação, uso da skill e do subagente, problemas comuns.
    - [README do projeto](README.md): biblioteca, servidor MCP, saídas compactadas e configuração.
@@ -21,7 +21,7 @@ Ajuda com o plugin **Jevin** e com o pacote **jev-claud**.
 | O Claude não usa as ferramentas MCP | Confira `claude mcp list` (deve aparecer `jev-claud`) e abra uma sessão nova |
 | O plugin aparece com o nome antigo (`jev` ou `jev-claude`) | Rode `jev-claud setup`: ele troca pelos nomes novos |
 | O `jevin@synced` (da sua conta do Claude) aparece como "not loaded" | A cópia do marketplace também está ativa. Rode `claude plugin uninstall jevin@jev-claud` (ou `jev-claud setup`) e abra uma sessão nova |
-| O Ollama não responde | `ollama serve` e `jev-claud setup` (que baixa o modelo, se faltar) |
+| `summarize_file` ou `write` devolvem `mode: "agent"` | Esperado: o host não oferece MCP sampling (o Claude Code, hoje). O trabalho volta ao agente em blocos; não há modelo para instalar |
 
 ## Abrir uma issue
 

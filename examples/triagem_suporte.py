@@ -5,7 +5,8 @@ Rode sem configurar nada (modo offline, custo zero):
     python examples/triagem_suporte.py
 
 Com Jev (pago, com teto):  TYPESAFE_API_KEY=... JEV_CLAUD_BUDGET_USD=1 python examples/triagem_suporte.py
-Com texto via Ollama local: instale https://ollama.com e rode `ollama pull llama3.2`.
+Com texto: passe um `Writer` (ex.: `CallableWriter` com o SDK da Anthropic) a `JevClaud(writer=...)`.
+Pelo servidor MCP, o texto fica com o LLM da sessão.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ def main() -> None:
                 )
                 print(f"  resposta: {resposta}")
             except NoWriterError:
-                print("  resposta: (sem LLM local; instale o Ollama para gerar texto grátis)")
+                print("  resposta: (sem LLM de texto; passe JevClaud(writer=...) para gerar a resposta)")
 
 
 if __name__ == "__main__":

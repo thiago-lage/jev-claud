@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -35,9 +36,6 @@ class FakeSystem(System):
         tmp_path: Path,
         platform: str = "win32",
         *,
-        ollama: bool = False,
-        server: bool = False,
-        models: Sequence[str] = (),
         claude: bool = False,
         skill: bool = False,
         sdk: bool = True,
@@ -52,9 +50,6 @@ class FakeSystem(System):
         self.python = "python"
         self.in_venv = in_venv
         self.state: dict[str, Any] = {
-            "ollama": ollama,
-            "server": server,
-            "models": list(models),
             "claude": claude,
             "skill": skill,
             "sdk": sdk,
@@ -83,7 +78,7 @@ class FakeSystem(System):
         self.spawned: list[list[str]] = []
 
     def which(self, name: str) -> str | None:
-        if name in ("ollama", "claude"):
+        if name == "claude":
             return f"/bin/{name}" if self.state[name] else None
         return f"/usr/bin/{name}" if name in self.tools else None
 
@@ -93,16 +88,7 @@ class FakeSystem(System):
         if cwd is not None:
             self.cwds.append((command, cwd))
         joined = " ".join(command)
-        if (
-            "Ollama.Ollama" in joined
-            or command[:2] == ["brew", "install"]
-            or "ollama.com/install.sh" in joined
-        ):
-            self.state["ollama"] = True
-        elif "pull" in command:
-            name = command[-1]
-            self.state["models"].append(name if ":" in name else f"{name}:latest")
-        elif "claude.ai/install" in joined:
+        if "claude.ai/install" in joined:
             self.state["claude"] = True
         elif command[1:4] == ["plugin", "marketplace", "add"]:
             self.state["jev_marketplace" if command[4] == "thiago-lage/jev-claud" else "marketplace"] = True
@@ -202,9 +188,6 @@ class FakeSystem(System):
     def process_alive(self, pid: int) -> bool:
         return pid in self.alive
 
-    def ollama_models(self) -> list[str] | None:
-        return list(self.state["models"]) if self.state["server"] else None
-
     def sdk_installed(self) -> bool:
         return bool(self.state["sdk"])
 
@@ -230,9 +213,6 @@ def make_ui(
 def ready_system(tmp_path: Path) -> FakeSystem:
     system = FakeSystem(
         tmp_path,
-        ollama=True,
-        server=True,
-        models=["llama3.2:latest"],
         claude=True,
         skill=True,
         sdk=True,
@@ -256,10 +236,11 @@ def test_check_mode_only_reports(tmp_path: Path) -> None:
     system = FakeSystem(tmp_path)
     ui, out = make_ui()
     report = Setup(system=system, ui=ui, version="0.2.0").run("check")
-    assert not report.ok
+    assert report.ok  # nada essencial depende de instalar modelo: o texto fica com o LLM da sessão
     assert system.commands == [] and system.spawned == []
     text = out.getvalue()
-    assert "Bem-vindo ao jev-claud setup" in text and "Ollama" in text and "Ainda falta" in text
+    assert "Bem-vindo ao jev-claud setup" in text and "Claude Code" in text
+    assert "modelo" not in text.lower()
     assert "setup_version" not in load_config()  # --check não grava nada
 
 
@@ -270,8 +251,7 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
 
     assert report.ok, out.getvalue()
     commands = [" ".join(c) for c in system.commands]
-    assert any(c.startswith("winget install -e --id Ollama.Ollama") for c in commands)
-    assert "/bin/ollama pull llama3.2" in commands
+    assert not any("winget" in c or " pull " in c for c in commands)  # nenhum modelo local
     assert any("irm https://claude.ai/install.ps1 | iex" in c for c in commands)
     assert "/bin/claude plugin marketplace add typesafe-ai/skills" in commands
     assert "/bin/claude plugin install typesafe@typesafe-ai" in commands
@@ -282,38 +262,27 @@ def test_yes_mode_sets_up_everything_on_windows(tmp_path: Path) -> None:
     assert shim == b'#!/bin/sh\nexec "python" -m jev_claud "$@"\n'
     settings = json.loads((system.home / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert settings == {"hooks": {"PreToolUse": [{"matcher": "Bash|PowerShell", "hooks": [HOOK]}]}}
-    assert system.spawned == [["/bin/ollama", "serve"]]
+    assert system.spawned == []  # nenhum servidor local
     assert report.results["jev_key"] is False  # exige digitar: fica para o modo interativo
     assert RULE_START in (system.home / ".claude" / "CLAUDE.md").read_text(encoding="utf-8")
     assert load_config()["setup_version"] == "0.2.0"
 
 
-@pytest.mark.parametrize(
-    ("platform", "ollama_cmd", "claude_cmd"),
-    [
-        ("darwin", "brew install ollama", "curl -fsSL https://claude.ai/install.sh | bash"),
-        (
-            "linux",
-            "curl -fsSL https://ollama.com/install.sh | sh",
-            "curl -fsSL https://claude.ai/install.sh | bash",
-        ),
-    ],
-)
-def test_platform_installers(tmp_path: Path, platform: str, ollama_cmd: str, claude_cmd: str) -> None:
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_platform_installers(tmp_path: Path, platform: str) -> None:
     system = FakeSystem(tmp_path, platform)
     ui, _ = make_ui()
-    Setup(system=system, ui=ui).run("yes")
+    assert Setup(system=system, ui=ui).run("yes").ok
     commands = [" ".join(c) for c in system.commands]
-    assert any(ollama_cmd in c for c in commands)
-    assert any(claude_cmd in c for c in commands)
+    assert any("curl -fsSL https://claude.ai/install.sh | bash" in c for c in commands)
+    assert not any(c.startswith(("brew", "sh -c")) for c in commands)
 
 
-def test_missing_package_manager_is_explained(tmp_path: Path) -> None:
+def test_setup_without_package_managers_still_completes(tmp_path: Path) -> None:
     system = FakeSystem(tmp_path, "win32", tools=())
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
-    assert not report.ok
-    assert "https://ollama.com/download" in out.getvalue()
+    assert report.ok and "Tudo pronto" in out.getvalue()
 
 
 def test_interactive_declining_installs_nothing(tmp_path: Path) -> None:
@@ -323,7 +292,7 @@ def test_interactive_declining_installs_nothing(tmp_path: Path) -> None:
     assert system.commands == []
     assert "pulado." in out.getvalue()
     assert not (system.home / ".claude" / "CLAUDE.md").exists()
-    assert not report.ok
+    assert report.ok  # recusar o opcional não deixa nada essencial faltando
 
 
 def test_interactive_saves_key_and_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -368,7 +337,9 @@ def test_sdk_installs_inside_isolated_env(tmp_path: Path) -> None:
 
 
 def test_rule_is_appended_once_preserving_content(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, ollama=True, server=True, models=["llama3.2:latest"])
+    system = FakeSystem(
+        tmp_path,
+    )
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
     rule.write_text("# Minhas regras", encoding="utf-8")
@@ -380,26 +351,14 @@ def test_rule_is_appended_once_preserving_content(tmp_path: Path) -> None:
     assert text.count(RULE_START) == 1
 
 
-def test_custom_model_is_pulled_and_remembered(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, ollama=True, server=True)
+def test_setup_stores_only_known_keys(tmp_path: Path) -> None:
+    home = Path(os.environ["JEV_CLAUD_HOME"])
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.json").write_text('{"budget_usd": 2, "modelo_antigo": "x"}', encoding="utf-8")
     ui, _ = make_ui()
-    Setup(system=system, ui=ui, ollama_model="qwen2.5:3b").run("yes")
-    assert ["/bin/ollama", "pull", "qwen2.5:3b"] in system.commands
-    assert load_config()["ollama_model"] == "qwen2.5:3b"
-    assert Settings.from_env().ollama_model == "qwen2.5:3b"
-
-
-def test_windows_starts_ollama_app_when_present(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path)
-    app_dir = tmp_path / "local" / "Programs" / "Ollama"
-    app_dir.mkdir(parents=True)
-    (app_dir / "ollama.exe").write_text("")
-    (app_dir / "ollama app.exe").write_text("")
-    system.tools = set()
-    system.state["ollama"] = False  # só encontrado pelo caminho padrão, não pelo PATH
-    ui, _ = make_ui()
-    Setup(system=system, ui=ui).run("yes")
-    assert system.spawned == [[str(app_dir / "ollama app.exe")]]
+    Setup(system=FakeSystem(tmp_path), ui=ui, version="1.0.0").run("yes")
+    stored = json.loads((home / "config.json").read_text(encoding="utf-8"))
+    assert stored == {"budget_usd": 2, "setup_version": "1.0.0"}
 
 
 def test_non_interactive_terminal_only_checks(tmp_path: Path) -> None:
@@ -450,17 +409,19 @@ def test_config_file_roundtrip_and_validation(tmp_path: Path) -> None:
 
 
 def test_cli_setup_modes(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, str | None]] = []
+    calls: list[str] = []
 
-    def fake_run_setup(mode: str, *, ollama_model: str | None = None, version: str = "") -> int:
-        calls.append((mode, ollama_model))
+    def fake_run_setup(mode: str, *, version: str = "") -> int:
+        calls.append(mode)
         return 0
 
     monkeypatch.setattr("jev_claud.cli.run_setup", fake_run_setup)
     assert main(["setup"]) == 0
-    assert main(["setup", "--yes", "--model", "qwen2.5:3b"]) == 0
+    assert main(["setup", "--yes"]) == 0
     assert main(["setup", "--check"]) == 0
-    assert calls == [("interactive", None), ("yes", "qwen2.5:3b"), ("check", None)]
+    assert calls == ["interactive", "yes", "check"]
+    with pytest.raises(SystemExit):
+        main(["setup", "--model", "qualquer"])  # não há modelo para escolher
 
 
 def test_cli_update_upgrades_itself_when_not_editable(
@@ -498,7 +459,9 @@ def test_config_used_by_jevclaude(tmp_path: Path) -> None:
 
 
 def test_old_rule_block_is_replaced_in_place(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, ollama=True, server=True, models=["llama3.2:latest"])
+    system = FakeSystem(
+        tmp_path,
+    )
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
     rule.write_text(f"# Antes\n\n{RULE_START}\nregra antiga\n{RULE_END}\n\n# Depois\n", encoding="utf-8")
@@ -511,7 +474,7 @@ def test_old_rule_block_is_replaced_in_place(tmp_path: Path) -> None:
 
 
 def test_bash_shim_only_on_windows(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     ui, _ = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
     assert report.results["plugin"] is True and report.results["hook"] is True
@@ -520,7 +483,7 @@ def test_bash_shim_only_on_windows(tmp_path: Path) -> None:
 
 def test_hook_goes_to_settings_preserving_the_rest(tmp_path: Path) -> None:
     """O hook fica no settings.json do usuário: troca versões anteriores dele e não toca no resto."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     settings = system.home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
     lint = {"type": "command", "command": "meu-lint"}
@@ -560,7 +523,7 @@ def test_hook_goes_to_settings_preserving_the_rest(tmp_path: Path) -> None:
 
 def test_hook_only_on_bash_is_upgraded_to_powershell(tmp_path: Path) -> None:
     """Até a 0.9 o hook só via a ferramenta Bash; o app desktop no Windows usa a PowerShell."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     settings = system.home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
     settings.write_text(
@@ -577,7 +540,7 @@ def test_hook_only_on_bash_is_upgraded_to_powershell(tmp_path: Path) -> None:
 
 
 def test_invalid_settings_are_left_alone(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     settings = system.home / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
     settings.write_text("{ quebrado", encoding="utf-8")
@@ -589,7 +552,7 @@ def test_invalid_settings_are_left_alone(tmp_path: Path) -> None:
 
 def test_everything_named_jev_claude_is_migrated(tmp_path: Path) -> None:
     """Quem vem da 0.6: marketplace, plugins e MCP com o nome antigo viram jev-claud/jevin."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(old_marketplace=True, old_plugin=True, old_jev=True, old_mcp=True)
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
@@ -608,7 +571,10 @@ def test_everything_named_jev_claude_is_migrated(tmp_path: Path) -> None:
 
 
 def test_old_rule_markers_are_replaced(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"])
+    system = FakeSystem(
+        tmp_path,
+        "linux",
+    )
     rule = system.home / ".claude" / "CLAUDE.md"
     rule.parent.mkdir(parents=True)
     old = "<!-- jev-claude:start -->\nregra da 0.6\n<!-- jev-claude:end -->"
@@ -621,7 +587,7 @@ def test_old_rule_markers_are_replaced(tmp_path: Path) -> None:
 
 
 def test_windows_shims_cover_both_names(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, claude=True)
     ui, _ = make_ui()
     Setup(system=system, ui=ui).run("yes")
     for name in ("jev-claud", "jev-claude"):
@@ -630,7 +596,7 @@ def test_windows_shims_cover_both_names(tmp_path: Path) -> None:
 
 
 def test_plugin_from_the_claude_directory_counts_as_installed(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state["synced"] = True
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
@@ -641,7 +607,7 @@ def test_plugin_from_the_claude_directory_counts_as_installed(tmp_path: Path) ->
 
 def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Path) -> None:
     """Com o Jevin da conta ativo, a cópia do marketplace impede o carregamento: o setup a remove."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(synced=True, plugin=True)
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
@@ -652,7 +618,7 @@ def test_marketplace_copy_is_removed_when_the_directory_one_exists(tmp_path: Pat
 
 def test_mcp_from_the_plugin_counts_as_registered(tmp_path: Path) -> None:
     """O plugin Jevin traz o servidor MCP: o setup não registra outro igual."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(plugin=True, plugin_mcp=True)
     ui, out = make_ui()
     report = Setup(system=system, ui=ui).run("yes")
@@ -663,7 +629,7 @@ def test_mcp_from_the_plugin_counts_as_registered(tmp_path: Path) -> None:
 
 def test_duplicate_mcp_registration_is_removed(tmp_path: Path) -> None:
     """Quem já tinha o registro do setup e recebe o plugin com o servidor fica com um só."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(plugin=True, mcp=True, plugin_mcp=True)
     ui, out = make_ui()
     setup = Setup(system=system, ui=ui)
@@ -756,7 +722,7 @@ def test_plugin_versions_are_read_from_the_real_listing() -> None:
 
 def test_stale_plugin_is_updated_by_setup(tmp_path: Path) -> None:
     """Até a 0.10 o setup achava o Jevin "ok" em qualquer versão: a skill nova nunca chegava."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(
         plugin=True, jev_marketplace=True, plugin_version="0.9.1", plugin_scopes=["user", "project"]
     )
@@ -849,7 +815,7 @@ def test_real_process_check_never_kills_anything() -> None:
 
 
 def test_setup_cleans_after_updating_the_plugin(tmp_path: Path) -> None:
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.state.update(
         plugin=True, jev_marketplace=True, plugin_version="0.9.1", marketplace_version="0.10.1"
     )
@@ -864,7 +830,7 @@ def _legacy_layout(tmp_path: Path) -> tuple[FakeSystem, Path, Path]:
     system = FakeSystem(tmp_path, claude=True)
     install = system.home / ".local" / "share" / "jev-claude"
     (install / "venv" / "Scripts").mkdir(parents=True)
-    (install / "instalar-ollama.log").write_text("log", encoding="utf-8")
+    (install / "instalar.log").write_text("log", encoding="utf-8")
     local = Path(system.env["LOCALAPPDATA"])
     data = local / "jev-claude"
     data.mkdir(parents=True)
@@ -920,8 +886,9 @@ def test_refresh_installs_nothing_new(tmp_path: Path) -> None:
     assert "sua conta do Claude, que o atualiza" in out.getvalue()
 
 
-def test_rule_mentions_ollama_and_every_effort_level() -> None:
-    for word in ("Ollama", "effort", "baixo", "medio", "alto", "extra", "max", "ultracode", "nuvem"):
+def test_rule_mentions_the_session_llm_and_every_effort_level() -> None:
+    assert "LLM desta sessão" in CLAUDE_RULE and 'mode: "agent"' in CLAUDE_RULE
+    for word in ("effort", "baixo", "medio", "alto", "extra", "max", "ultracode", "nuvem"):
         assert word in CLAUDE_RULE
 
 
@@ -962,7 +929,7 @@ def test_cli_update_prints_each_command_before_running_it(monkeypatch: pytest.Mo
 
 def agents_system(tmp_path: Path) -> FakeSystem:
     """Claude Code pronto; Cursor e Codex instalados (CODEX_HOME aponta para a pasta de teste)."""
-    system = FakeSystem(tmp_path, "linux", ollama=True, server=True, models=["llama3.2:latest"], claude=True)
+    system = FakeSystem(tmp_path, "linux", claude=True)
     system.tools |= {"cursor", "codex"}
     system.env = {**system.env, "CODEX_HOME": str(tmp_path / "codex")}
     return system

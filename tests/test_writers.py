@@ -8,8 +8,7 @@ from typing import Any
 
 import pytest
 
-from jev_claud import OllamaWriter, OpenAICompatibleWriter, WriterError
-from jev_claud.writers import auto_writer
+from jev_claud import JevClaud, NoWriterError, OpenAICompatibleWriter, WriterError
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -25,9 +24,6 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(type(self).status, {"error": "quota"})
             return
         self._send(200, {"choices": [{"message": {"role": "assistant", "content": "  Olá, tudo certo!  "}}]})
-
-    def do_GET(self) -> None:
-        self._send(200, {"models": []})
 
     def _send(self, status: int, payload: dict[str, Any]) -> None:
         data = json.dumps(payload).encode()
@@ -78,21 +74,12 @@ def test_unreachable_endpoint_becomes_writer_error() -> None:
         OpenAICompatibleWriter("http://127.0.0.1:9", "m", timeout=1).write("oi")
 
 
-def test_ollama_detection_and_defaults(server: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert OllamaWriter.available(server)
-    assert not OllamaWriter.available()  # OLLAMA_HOST aponta para uma porta fechada nos testes
-    monkeypatch.setenv("OLLAMA_HOST", server.removeprefix("http://"))
-    writer = OllamaWriter()
-    assert writer.base_url == f"{server}/v1"
-    assert writer.model == "llama3.2"
-    assert isinstance(auto_writer(), OllamaWriter)
-
-
-def test_auto_writer_prefers_explicit_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert auto_writer() is None
-    monkeypatch.setenv("JEV_CLAUD_LLM_BASE_URL", "http://localhost:1234/v1")
-    with pytest.raises(WriterError):
-        auto_writer()
-    monkeypatch.setenv("JEV_CLAUD_LLM_MODEL", "qwen")
-    writer = auto_writer()
-    assert isinstance(writer, OpenAICompatibleWriter) and writer.model == "qwen"
+def test_no_writer_is_detected_from_the_environment(monkeypatch: pytest.MonkeyPatch, server: str) -> None:
+    """Sem `Writer` explícito, nada é detectado: o texto fica com o LLM da sessão."""
+    monkeypatch.setenv("JEV_CLAUD_LLM_BASE_URL", f"{server}/v1")
+    monkeypatch.setenv("JEV_CLAUD_LLM_MODEL", "qualquer")
+    with JevClaud(store=":memory:") as r:
+        assert r.writer is None
+        with pytest.raises(NoWriterError, match="LLM de sessão"):
+            r.write("oi")
+    assert _Handler.requests == []

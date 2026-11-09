@@ -19,8 +19,6 @@ def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         if name.startswith(("JEV_CLAUD_", "JEV_CLAUDE_", "TYPESAFE_")):
             monkeypatch.delenv(name)
     monkeypatch.setenv("JEV_CLAUD_HOME", str(tmp_path / "home"))
-    # Porta "discard": recusa a conexão na hora, então nunca detectamos um Ollama real.
-    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
 
 
 class FakeClient:

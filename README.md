@@ -92,16 +92,15 @@ Cada peça fica na configuração do Claude Code, que ele carrega sozinho em tod
 
 No app desktop, a sessão pode rodar em três lugares:
 
-| Sessão | Funciona? | Esforço local e modo offline | Por quê |
+| Sessão | Funciona? | Ferramentas MCP | Por quê |
 | --- | --- | --- | --- |
-| **Este computador** | Sim, tudo | Sim | Usa o `~/.claude`, o jev-claud e o Ollama desta máquina |
+| **Este computador** | Sim, tudo | Sim | Usa o `~/.claude` e o jev-claud desta máquina |
 | **Remote Control** | Sim, tudo | Sim | É uma sessão deste computador, controlada pelo celular ou pela web |
-| **Nuvem** | Só o plugin, se o repositório pedir | **Não** | Roda numa máquina da Anthropic que clona o repositório: o hook, o MCP, a regra global e o Ollama do seu computador não vão junto |
+| **Nuvem** | Só o plugin, se o repositório pedir | Só com o pacote instalado lá | Roda numa máquina da Anthropic que clona o repositório: o hook, o MCP e a regra global do seu computador não vão junto |
 
 Na nuvem, o que continua valendo é o plugin: a skill `jev` e o subagente `scout` (Haiku, esforço
-baixo). Os níveis de esforço (`baixo` a `ultracode`) e o `JEV_CLAUD_OFFLINE` dependem do servidor
-MCP e do Ollama, que só existem no seu computador. Para usá-los fora de casa, use o
-**Remote Control**: a sessão continua rodando na sua máquina.
+baixo). As ferramentas MCP precisam do pacote `jev-claud` instalado na máquina da sessão. Não há
+modelo local nem servidor de texto para levar junto: o texto fica sempre com o LLM da sessão.
 
 Para ter o Jevin também nas sessões na nuvem, declare o plugin no `.claude/settings.json` do
 repositório (o Claude Code instala os plugins declarados ali):
@@ -115,69 +114,65 @@ repositório (o Claude Code instala os plugins declarados ali):
 }
 ```
 
-### Esforço por modelo, offline e grátis
+### O LLM da sessão, sem modelo local
+
+O jev-claud não tem backend de texto próprio: ele opera **dentro do LLM da sessão** em que está
+instalado. O trabalho determinístico (ler o arquivo, quebrar em blocos, contar, deduplicar,
+cache, cascata offline) roda no servidor MCP; o que precisa de linguagem vai ao LLM da sessão:
+
+| O host oferece MCP sampling? | O que acontece | `status` mostra |
+| --- | --- | --- |
+| **Sim** (declara `sampling` no `initialize`) | O servidor pede o texto ao host com `sampling/createMessage` e devolve o resultado pronto: resumo, rascunho, rótulos dos itens incertos, a ordem dos melhores candidatos | `llm.mode = "session_sampling"` e o modelo que o host informou |
+| **Não** (o Claude Code, hoje) | As ferramentas devolvem o trabalho ao agente, com `mode: "agent"`: os blocos a resumir (paginados), os itens incertos, a tarefa de escrita. Nenhum outro modelo é chamado | `llm.mode = "agent"` e o nome do host |
+
+O host escolhe e cobra o modelo; o jev-claud não tem seletor de modelo nem nada para instalar.
+
+### Esforço: tamanho dos blocos e profundidade
 
 O seletor do app escolhe o modelo e o esforço **do Claude** (Baixo, Médio, Alto, Extra, Máx,
-Ultracode). O jev-claud tem os mesmos seis níveis na camada local, que roda no seu computador
-de graça e sem internet. O texto grande é quebrado em blocos: cada bloco é resumido por um
-modelo do Ollama e, no fim, outro modelo junta os resumos parciais. Quanto mais alto o esforço,
-menores os blocos e mais forte o modelo. O Claude escolhe o nível em cada chamada de
-`summarize_file` e `write`:
+Ultracode). O jev-claud usa os mesmos seis nomes para decidir **quanto trabalho** fazer: o
+tamanho dos blocos, a sobreposição entre eles e a profundidade da junção. O modelo é sempre o
+da sessão. O Claude escolhe o nível em cada chamada de `summarize_file` e `write`:
 
-| Seletor do Claude | `effort` no jev-claud | Blocos | Modelo dos blocos | Modelo da junção | Revisão |
-| --- | --- | --- | --- | --- | --- |
-| Baixo | `baixo` | grandes, sem sobreposição | rápido | rápido | não |
-| Médio | `medio` (padrão) | médios, pouca sobreposição | rápido | padrão | não |
-| Alto | `alto` | menores, mais sobreposição | padrão | forte | não |
-| Extra | `extra` | pequenos, mais sobreposição | padrão | forte | não |
-| Máx | `max` | os menores, mais sobreposição | forte | forte | não |
-| Ultracode | `ultracode` | como `max` | forte | forte | sim |
+| Seletor do Claude | `effort` no jev-claud | Blocos | Junção | Revisão |
+| --- | --- | --- | --- | --- |
+| Baixo | `baixo` | grandes, sem sobreposição | curta | não |
+| Médio | `medio` (padrão) | médios, pouca sobreposição | média | não |
+| Alto | `alto` | menores, mais sobreposição | longa | não |
+| Extra | `extra` | pequenos, mais sobreposição | longa | não |
+| Máx | `max` | os menores, mais sobreposição | a mais longa | não |
+| Ultracode | `ultracode` | como `max` | a mais longa | sim |
 
-A **revisão** do `ultracode` é uma passada a mais do modelo forte: ele confere o resumo final
-contra os resumos parciais. Essa revisão não garante fidelidade ao documento original.
+A **revisão** do `ultracode` é uma passada a mais que confere o resumo final contra os
+resumos parciais. Essa revisão não garante fidelidade ao documento original.
 Os nomes em inglês também valem (`low`, `medium`, `high`, `xhigh`), assim como
-`médio`, `máx` e `máximo`.
+`médio`, `máx` e `máximo`. Em `write`, o esforço define o limite da resposta (400 a 2.000 tokens).
 
-Cada camada usa um modelo do Ollama que você escolhe:
-
-```bash
-ollama pull llama3.2:1b && ollama pull llama3.2 && ollama pull qwen2.5:7b
-```
-
-```powershell
-$env:JEV_CLAUD_OLLAMA_MODEL_FAST = "llama3.2:1b"    # rápido
-$env:JEV_CLAUD_OLLAMA_MODEL = "llama3.2"            # padrão
-$env:JEV_CLAUD_OLLAMA_MODEL_STRONG = "qwen2.5:7b"   # forte
-$env:JEV_CLAUD_OFFLINE = "1"                        # garante: nada sai da máquina
-```
-
-Sem os modelos rápido e forte, tudo usa o padrão: nada quebra sem configuração extra.
-
-> **Onde funciona:** neste computador e no Remote Control. Nas sessões na **nuvem**, não: lá não
-> há o servidor MCP nem o Ollama (veja [Em que sessões funciona](#em-que-sessões-funciona)).
+**No modo agente** (`mode: "agent"`), `summarize_file` devolve os blocos do esforço pedido, até
+~24 mil caracteres por resposta, com `next_block` para pedir os próximos e `instructions` com o
+roteiro (resumir cada bloco, juntar e, no `ultracode`, revisar). Depois de escrever o resumo, o
+agente pode gravá-lo com `save_summary`: a próxima chamada com o mesmo arquivo, foco e esforço
+devolve o resumo do cache, sem reler os blocos.
 
 **O que deixa o resumo robusto:**
 
 - **O corte cai em parágrafo, linha ou frase**, nunca no meio de uma palavra, e cada bloco
   repete um pedaço do anterior para não perder o que ficou na emenda.
 - **A junção acontece em etapas:** se os resumos parciais forem grandes demais, eles são
-  juntados em rodadas, e o modelo pequeno nunca recebe mais que um bloco de cada vez.
+  juntados em rodadas, e o LLM nunca recebe mais que um bloco de cada vez.
 - **Uma parte que falha não derruba o resumo:** ela fica de fora e o resumo avisa
   ("1 de 5 partes falharam").
-- **Se o modelo de uma camada falhar** (por exemplo, porque não foi baixado), a chamada é
-  refeita com o modelo padrão, e esse modelo deixa de ser tentado até o fim da sessão.
 
 **Modo offline estrito (`JEV_CLAUD_OFFLINE=1`):**
 
 - o Jev (pago) nunca é chamado, mesmo que exista orçamento configurado;
-- o texto só vai para uma LLM neste computador ou na rede local (`localhost`, `192.168.x.x`...).
-  Um endpoint na internet é recusado ou ignorado;
-- `jev-claud doctor` e a ferramenta `status` mostram se o modo está ligado e qual modelo cada
-  esforço usa.
+- um `Writer` que você passar à biblioteca só é aceito se apontar para este computador ou a rede
+  local (`localhost`, `192.168.x.x`...);
+- `jev-claud doctor` e a ferramenta `status` mostram se o modo está ligado.
 
-**E o Claude?** As respostas do próprio Claude continuam gastando o limite do seu plano: elas
-rodam nos servidores da Anthropic, não offline. O jev-claud faz o trabalho pesado de graça na
-sua máquina e manda ao Claude menos coisa para ler. O subagente `scout` do plugin roda no Haiku
+**E o Claude?** As respostas do próprio Claude, inclusive o texto pedido por sampling ou feito
+no modo agente, continuam gastando o limite do seu plano. O jev-claud faz o trabalho
+determinístico de graça na sua máquina e manda ao Claude menos coisa para ler. O subagente `scout` do plugin roda no Haiku
 com esforço baixo, então explorar o código também gasta menos.
 
 ## Para desenvolvedores: decisões tipadas no seu código
@@ -189,7 +184,7 @@ A biblioteca Python `jev-claud` separa as duas saídas de IA que um app tem:
 | Quem consome a resposta? | Use | Motor | Por quê |
 | --- | --- | --- | --- |
 | **O código**, para ramificar (`if`, `match`, roteamento, filtro, ranking) | `decide`, `when`, `switch`, `rank` | [TypeSafe **Jev**](https://docs.typesafe.ai) (System One) | Resposta tipada e calibrada (rótulo, probabilidade, grau). Sem gerar JSON, sem parse, sem tokens de saída pagos. |
-| **Uma pessoa**, que vai ler | `write` | LLM (Ollama local, endpoint compatível com OpenAI, ou qualquer função) | Texto natural é o que LLMs fazem bem. |
+| **Uma pessoa**, que vai ler | `write` | LLM: o da sessão (pelo MCP) ou o `Writer` que você passar | Texto natural é o que LLMs fazem bem. |
 
 Regras conhecidas, cálculos e buscas exatas continuam em código puro: a IA entra só onde
 falta senso comum semântico.
@@ -249,7 +244,6 @@ terminal: mostra o que falta, explica para que serve e **pergunta antes de insta
 
 | Passo | O que faz |
 | --- | --- |
-| Ollama + servidor + modelo | Instala (winget / Homebrew / script oficial), inicia e baixa o `llama3.2` (~2 GB): texto grátis no `write()`. |
 | Chave do Jev | Opcional. Guarda a chave e o orçamento mensal em `config.json` (padrão US$ 0). |
 | Claude Code | Instalador oficial de claude.ai. |
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
@@ -263,7 +257,6 @@ terminal: mostra o que falta, explica para que serve e **pergunta antes de insta
 jev-claud setup            # interativo (também abre sozinho no primeiro `jev-claud`)
 jev-claud setup --yes      # aceita tudo que não exige digitar nada
 jev-claud setup --check    # só verifica; sai com 1 se faltar algo essencial
-jev-claud setup --model qwen2.5:3b   # outro modelo do Ollama
 ```
 
 ### Instalação pelo PyPI
@@ -271,7 +264,7 @@ jev-claud setup --model qwen2.5:3b   # outro modelo do Ollama
 ```bash
 pip install "jev-claud[jev]"    # com o SDK do Jev
 pip install jev-claud           # só o núcleo: nenhuma dependência, modo offline grátis
-jev-claud setup                 # opcional: Ollama, Claude Code, plugin e regra global
+jev-claud setup                 # opcional: Claude Code, plugin e regra global
 ```
 
 O instalador de uma linha e o `jev-claud update` usam a versão lançada no PyPI. Versão em
@@ -292,19 +285,21 @@ O `jev-claud setup` registra o jev-claud como servidor MCP do Claude Code (ou fa
 claude mcp add -s user jev-claud -- python -m jev_claud mcp
 ```
 
-Nas próximas sessões o Claude ganha estas ferramentas, que rodam **fora do contexto dele**:
+Nas próximas sessões o Claude ganha estas ferramentas. O trabalho determinístico roda **fora
+do contexto dele**; o que precisa de linguagem fica com o LLM da sessão
+([sampling ou modo agente](#o-llm-da-sessão-sem-modelo-local)):
 
 | Ferramenta | O Claude manda | Recebe de volta | Motor |
 | --- | --- | --- | --- |
-| `classify` | caminho de um arquivo + rótulos | contagens + itens incertos | Jev / offline |
-| `rank` | caminho + consulta | só os top_k | Jev / offline |
-| `summarize_file` | caminho + foco | resumo não verificado, cobertura, modelos e cache | Ollama por padrão |
-| `decide` | texto/JSON + perguntas | valores tipados + confiança | Jev / offline |
-| `write` | instrução curta | rascunho | Ollama (grátis) |
+| `classify` | caminho de um arquivo + rótulos | contagens + itens incertos | offline / Jev; incertos no LLM da sessão |
+| `rank` | caminho + consulta | só os top_k | offline / Jev; LLM da sessão reordena |
+| `summarize_file` | caminho + foco | resumo não verificado e cache, ou os blocos (modo agente) | LLM da sessão |
+| `decide` | texto/JSON + perguntas | valores tipados + confiança | offline / Jev; incertos no LLM da sessão |
+| `write` | instrução curta | rascunho, ou a tarefa (modo agente) | LLM da sessão |
 | `diagnose_log` | caminho do log + código de saída observado | sinais de falha agrupados e linhas originais | Código puro |
 | `search_file` | caminho + texto literal | ocorrências com contexto e linhas | Código puro |
 | `read_evidence` | caminho + linhas + fingerprint opcional | trecho original; rejeita evidência desatualizada | Código puro |
-| `status` | — | backends, modelos, cache e últimas 10 chamadas desta sessão | — |
+| `status` | — | LLM ativo (sampling ou modo agente), Jev, cache de resumos e últimas 10 chamadas | — |
 
 ### Fluxo de diagnóstico para o agente
 
@@ -354,9 +349,9 @@ tokens. Com `classify`, o Claude envia ~100 tokens (o caminho e os rótulos) e r
 contagens). O mesmo vale para resumir arquivos grandes e escolher o que vale a pena ler.
 
 **Onde não compensa:** pergunta pequena e única. A chamada da ferramenta e as definições das
-ferramentas também custam tokens; o Claude responde direto. E o `llama3.2` (3B) é bem menos
-capaz que o Claude: use para rascunhos e resumos, e deixe o Claude revisar o que importa. A
-regra global instalada pelo setup orienta o Claude a fazer essa escolha.
+ferramentas também custam tokens; o Claude responde direto. No modo agente, `summarize_file`
+devolve os blocos para o próprio Claude ler: a economia vem da paginação e do cache, não de outro
+modelo. A regra global instalada pelo setup orienta o Claude a fazer essa escolha.
 
 ## Saídas de teste compactadas
 
@@ -392,8 +387,8 @@ Transparência total sobre o que acontece na sua máquina:
   compactado (`logs/`, as 20 mais recentes) e contadores de economia por mês num SQLite. Nada sai
   da sua máquina.
 - **Envia:** o hook e o plugin não acessam a rede. A biblioteca `jev-claud` só envia texto para
-  a API da TypeSafe (Jev) se você configurar uma chave e um orçamento, e só para o Ollama local
-  quando usa a LLM de texto.
+  a API da TypeSafe (Jev) se você configurar uma chave e um orçamento. O texto fica com o LLM da
+  sessão (pelo host do MCP) ou com o `Writer` que o seu código passar.
 - **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
   passa pelas mesmas perguntas de permissão) e não coleta telemetria.
 
@@ -485,8 +480,10 @@ têm prioridade sobre o arquivo.
 | `JEV_CLAUD_CASCADE_ACCEPT` | `0.8` | Confiança mínima para aceitar a resposta offline. Suba para escalar mais ao Jev. |
 | `JEV_CLAUD_CACHE_TTL_DAYS` | `7` | Validade do cache para aliases. Versões fixas não expiram. `0` desliga. |
 | `JEV_CLAUD_HOME` | cache do SO | Onde fica o SQLite (cache + gastos). |
-| `JEV_CLAUD_LLM_BASE_URL` / `JEV_CLAUD_LLM_MODEL` / `JEV_CLAUD_LLM_API_KEY` | — | LLM de texto em qualquer endpoint compatível com OpenAI. |
-| `JEV_CLAUD_OLLAMA_MODEL` / `OLLAMA_HOST` | `llama3.2` / `localhost:11434` | Ollama local, detectado automaticamente. |
+| `JEV_CLAUD_OFFLINE` | `0` | `1` nunca chama o Jev e só aceita `Writer` local. |
+
+Não há variáveis de LLM de texto: no MCP o texto fica com o LLM da sessão; na biblioteca, passe
+um `Writer` a `JevClaud(writer=...)`.
 
 ## API
 
@@ -593,8 +590,9 @@ custo estimado é ~1.500 tokens por imagem. Pela CLI:
 r.write("Resuma o ticket para o time em 3 linhas.", context=ticket, system="Seja objetivo.")
 ```
 
-LLMs suportadas: `OllamaWriter` (local, grátis), `OpenAICompatibleWriter(base_url, model,
-api_key=...)` e `CallableWriter(fn)` para plugar qualquer SDK:
+Sem `writer`, `write` levanta `NoWriterError`: no servidor MCP o texto vai ao LLM da sessão;
+na biblioteca, passe o seu. `CallableWriter(fn)` pluga qualquer SDK e
+`OpenAICompatibleWriter(base_url, model, api_key=...)` um endpoint que você escolheu:
 
 ```python
 from jev_claud import CallableWriter, JevClaud
@@ -617,7 +615,6 @@ npm test 2>&1 | jev-claud compact     # o mesmo, como filtro de texto
 jev-claud doctor                       # backends ativos, modelo, orçamento, cache (ou: jev-claud status)
 jev-claud ask "Fui cobrado duas vezes" --choice "Qual setor?" -o financeiro=cobrança -o suporte=erro
 jev-claud ask "Preciso disso hoje" --noul "É urgente?"
-jev-claud write "Explique o plano Pro em 2 frases"
 jev-claud models                       # modelos Jev disponíveis na conta
 jev-claud spend                        # gastos registrados por mês
 jev-claud update                       # atualiza jev-claud, typesafe-sdk, plugin Jevin e regra global
