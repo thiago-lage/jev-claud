@@ -72,10 +72,20 @@ Pronto. Abra uma conversa nova e trabalhe normalmente. Para conferir se está tu
 
 **Para atualizar**, rode `jev-claud update`. Ele atualiza tudo de uma vez: o pacote, o SDK do
 Jev, o plugin Jevin (skill e subagente, inclusive onde ele está instalado por projeto) e a regra
-global no `~/.claude/CLAUDE.md`. No fim, ele apaga o que versões anteriores deixaram: as
-versões antigas do plugin que nenhuma sessão aberta usa e as pastas da época em que o projeto
-se chamava jev-claude, quando nada mais aponta para elas. Depois, abra conversas novas: as que já estavam abertas continuam com a
-versão antiga, que sai no próximo `update`.
+global no `~/.claude/CLAUDE.md`. No fim, ele limpa sozinho o que versões anteriores deixaram:
+
+- o plugin Jevin registrado em projetos cuja pasta foi apagada, e as versões antigas dele no
+  cache que nenhuma sessão aberta usa;
+- o registro MCP repetido, quando o servidor já vem pelo plugin;
+- o hook e os MCPs (Claude Code, Cursor, Codex) que apontavam para outra instalação do
+  jev-claud: passam a usar a que acabou de ser atualizada;
+- o jev-claud de outro Python que eles usavam, se nada mais o usa. Uma instalação editável (o
+  clone de alguém) fica, e sem o atalho `jev-claud` desta instalação o update só avisa;
+- chaves do `config.json` que saíram de uso e as pastas da época em que o projeto se chamava
+  jev-claude.
+
+Depois, abra conversas novas: as que já estavam abertas continuam com a versão antiga, que sai
+no próximo `update`.
 
 ### Por que não preciso chamar nada?
 

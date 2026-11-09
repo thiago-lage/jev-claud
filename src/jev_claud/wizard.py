@@ -19,11 +19,13 @@ Modos: interativo (padrão), `--yes` (aceita tudo que não exige digitar nada) e
 
 from __future__ import annotations
 
+import contextlib
 import getpass
 import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -36,7 +38,7 @@ from typing import Any, Literal, TextIO
 
 from jev_claud import mascot
 from jev_claud.compact import HOOK_MATCHER, hook_command
-from jev_claud.config import config_path, load_config, save_config
+from jev_claud.config import CONFIG_KEYS, config_path, load_config, save_config
 from jev_claud.envvars import getenv
 
 REPO_URL = "https://github.com/thiago-lage/jev-claud"
@@ -62,6 +64,8 @@ OLD_PLUGIN_IDS = (f"jev-claude@{OLD_MARKETPLACE}", f"jev@{OLD_MARKETPLACE}")
 OLD_MCP_NAME = "jev-claude"
 OLD_RULE_MARKERS = ("<!-- jev-claude:start -->", "<!-- jev-claude:end -->")
 RULE_VERSION = 7
+# O hook ou um MCP grava o Python de outra instalação: o `refresh` os traz para a atual.
+ELSEWHERE = "aponta para outra instalação do jev-claud"
 CLAUDE_RULE = f"""{RULE_START}
 <!-- versão {RULE_VERSION}: o `jev-claud setup` e o `jev-claud update` substituem este bloco inteiro -->
 ## Como trabalhar
@@ -336,6 +340,21 @@ def _older(found: str, wanted: str) -> bool:
 
     old, new = parse(found), parse(wanted)
     return old is not None and new is not None and old < new
+
+
+def _same_path(a: str, b: str) -> bool:
+    """O mesmo arquivo? No Windows, sem diferenciar maiúsculas nem `/` e `\\`."""
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
+def _python_beside(command: str) -> str | None:
+    """Python do ambiente de um executável `jev-claud` (Scripts/ ou bin/ de um venv ou Python)."""
+    folder = Path(command).parent
+    if folder.name.lower() == "scripts":  # Windows: no venv fica junto; no Python do sistema, acima
+        candidates = [folder / "python.exe", folder.parent / "python.exe"]
+    else:
+        candidates = [folder / "python", folder / "python3"]
+    return next((str(path) for path in candidates if path.is_file()), None)
 
 
 def _load_json_object(path: Path) -> dict[str, Any] | None:
@@ -842,6 +861,11 @@ class Setup:
         entries = _plugin_entries(output, PLUGIN_ID)
         if not self._stale_plugin_versions(output):
             return True
+        if any(scope == "project" for _, scope in entries) and self._drop_missing_projects(path):
+            _, output = self.sys.capture([path, "plugin", "list"])
+            entries = _plugin_entries(output, PLUGIN_ID)
+            if not self._stale_plugin_versions(output):
+                return True
         self.sys.run([path, "plugin", "marketplace", "update", PLUGIN_MARKETPLACE])
         ok = True
         if any(scope in ("user", "") for _, scope in entries):
@@ -984,6 +1008,133 @@ class Setup:
                 f"{', '.join(kept)}: ainda em uso por uma sessão aberta; sai no próximo `jev-claud update`."
             )
 
+    def _drop_missing_projects(self, path: str) -> int:
+        """Tira o Jevin dos projetos cuja pasta foi apagada; devolve quantos registros saíram.
+
+        O Claude Code só desinstala de dentro da pasta do projeto: ela é recriada vazia por um
+        instante e apagada de novo. Um caminho num disco que não está montado fica como está.
+        """
+        code, output = self.sys.capture([path, "plugin", "list", "--json"])
+        try:
+            data = json.loads(output) if code == 0 else []
+        except ValueError:
+            return 0
+        removed = 0
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict) or item.get("id") != PLUGIN_ID or item.get("scope") != "project":
+                continue
+            folder = item.get("projectPath")
+            project = Path(folder) if isinstance(folder, str) and folder else None
+            if project is None or self.sys.exists(project) or not self.sys.exists(Path(project.anchor)):
+                continue
+            created = [project, *(p for p in project.parents if not self.sys.exists(p))]
+            try:
+                project.mkdir(parents=True)
+            except OSError:
+                continue
+            ok = self.sys.run([path, "plugin", "uninstall", "-s", "project", PLUGIN_ID], cwd=project) == 0
+            for leftover in created:  # do mais fundo para cima, só o que continua vazio
+                try:
+                    leftover.rmdir()
+                except OSError:
+                    break
+            if ok:
+                removed += 1
+                self.ui.status("ok", "Jevin em projeto apagado", f"registro removido: {project}")
+        return removed
+
+    def _shims(self) -> list[Path]:
+        names = ("jev-claud", "jev-claud.cmd", "jev-claude", "jev-claude.cmd")
+        return [self._bash_shim(name) for name in names]
+
+    def _shim_targets(self, shim: Path) -> list[str]:
+        """Pythons que um atalho de `~/.local/bin` chama (`"<python>" -m jev_claud`)."""
+        text = shim.read_text(encoding="utf-8", errors="replace") if self.sys.exists(shim) else ""
+        return re.findall(r'"([^"]+)"\s+-m\s+jev_claud\b', text)
+
+    def _referenced_pythons(self, *, with_path: bool = True) -> list[str]:
+        """Pythons de instalações do jev-claud que algo usa: hook, MCPs, atalhos e o comando no PATH."""
+        found: list[str] = []
+        for _, hook in _pre_tool_hooks(self._read_settings() or {}):
+            if _is_our_hook(hook):
+                with contextlib.suppress(ValueError, IndexError):
+                    found.append(shlex.split(hook["command"])[0])
+        for config in (self.sys.home / ".claude.json", self._cursor_dir() / "mcp.json"):
+            servers = (_load_json_object(config) or {}).get("mcpServers")
+            entry = servers.get(MCP_NAME) if isinstance(servers, dict) else None
+            if isinstance(entry, dict) and isinstance(entry.get("command"), str):
+                found.append(entry["command"])
+        codex = self._codex_dir() / "config.toml"
+        text = codex.read_text(encoding="utf-8") if self.sys.exists(codex) else ""
+        span = _toml_table_span(text, f"mcp_servers.{MCP_NAME}")
+        table = text[span[0] : span[1]] if span else ""
+        match = re.search(r'^command\s*=\s*"((?:[^"\\]|\\.)*)"', table, re.M)
+        if match:
+            found.append(re.sub(r"\\(.)", r"\1", match.group(1)))
+        for shim in self._shims():
+            found += self._shim_targets(shim)
+        command = self.sys.which("jev-claud") if with_path else None
+        if command and not any(_same_path(command, str(shim)) for shim in self._shims()):
+            python = _python_beside(command)
+            if python:
+                found.append(python)
+        return found
+
+    def _repoint_configs(self, path: str | None) -> None:
+        """O que já usa o jev-claud passa a usar esta instalação, a que acabou de ser atualizada."""
+        for title, check, fix in (
+            ("Hook de compactação", self._check_hook, self._install_hook),
+            ("Cursor: MCP do jev-claud", self._check_cursor_mcp, self._install_cursor_mcp),
+            ("Codex: MCP do jev-claud", self._check_codex_mcp, self._install_codex_mcp),
+        ):
+            if check()[1] == ELSEWHERE and fix():
+                self.ui.status("ok", title, "agora usa esta instalação")
+        if not path:
+            return
+        code, output = self.sys.capture([path, "mcp", "get", MCP_NAME])
+        match = re.search(r"^\s*Command:\s*(.+?)\s*$", output, re.M) if code == 0 else None
+        if match and not _same_path(match.group(1), self.sys.python):
+            self.sys.run([path, "mcp", "remove", "-s", "user", MCP_NAME])
+            command = [path, "mcp", "add", "-s", "user", MCP_NAME, "--", self.sys.python, *MCP_ARGS]
+            if self.sys.run(command) == 0:
+                self.ui.status("ok", "Servidor MCP no Claude Code", "agora usa esta instalação")
+
+    def _remove_unused_installs(self, pythons: Sequence[str]) -> None:
+        """Desinstala o jev-claud dos outros Pythons que a configuração usava e não usa mais.
+
+        Assim as cópias não ficam divergindo a cada versão. Só sai uma instalação comum (a
+        editável é o clone de alguém), que nenhum hook, MCP ou atalho usa, e só quando o comando
+        `jev-claud` continua existindo pelo atalho desta instalação.
+        """
+        in_use = self._referenced_pythons(with_path=False)
+        shim = self._bash_shim("jev-claud.cmd" if self.sys.platform == "win32" else "jev-claud")
+        shimmed = any(_same_path(target, self.sys.python) for target in self._shim_targets(shim))
+        seen: list[str] = []
+        for python in pythons:
+            if (
+                _same_path(python, self.sys.python)
+                or any(_same_path(python, other) for other in [*in_use, *seen])
+                or not self.sys.exists(Path(python))
+            ):
+                continue
+            seen.append(python)
+            code, output = self.sys.capture([python, "-m", "pip", "show", "jev-claud"])
+            if code != 0 or "Editable project location" in output:
+                continue
+            if not shimmed:
+                self.ui.note(f"Outra instalação do jev-claud: `{python} -m pip uninstall jev-claud`.")
+                continue
+            if self.sys.run([python, "-m", "pip", "uninstall", "-y", "-q", "jev-claud"]) == 0:
+                self.ui.status("ok", "Instalação anterior do jev-claud", f"removida de {python}")
+
+    def _prune_config(self) -> None:
+        """Tira do config.json as chaves que esta versão não usa mais (o modelo local, por exemplo)."""
+        path = config_path()
+        stale = sorted(set(_load_json_object(path) or {}) - CONFIG_KEYS)
+        if stale:
+            save_config({}, path)  # regrava só com as chaves conhecidas
+            self.ui.status("ok", "Configuração", "chaves que saíram de uso: " + ", ".join(stale))
+
     def _install_plugin(self) -> bool:
         path = self._claude()
         if not path:
@@ -1043,7 +1194,7 @@ class Setup:
         commands = [command for _, command in ours]
         if hook_command(self.sys.python) not in commands:
             if commands:
-                return False, "aponta para outra instalação do jev-claud"
+                return False, ELSEWHERE
             return False, "testes e builds longos enchem o contexto do Claude"
         if (HOOK_MATCHER, hook_command(self.sys.python)) not in ours:
             return False, "versão antiga: não cobre o PowerShell (app desktop no Windows)"
@@ -1109,11 +1260,14 @@ class Setup:
 
         Só atualiza o que existe (regra no CLAUDE.md e no AGENTS.md do Codex, plugin Jevin);
         não instala nada novo. Roda no processo da versão nova, para usar a regra nova.
-        No fim, limpa o que sobrou de versões anteriores: as versões do Jevin no cache que
-        nenhuma sessão aberta usa, o marketplace `jev-claude`, as pastas da 0.6 (venv e dados)
-        que nenhuma configuração usa mais e o registro MCP que o plugin Jevin passou a trazer.
+        No fim, limpa o que sobrou de versões anteriores: o Jevin de projetos apagados, as versões
+        dele no cache que nenhuma sessão aberta usa, o registro MCP que o plugin passou a trazer,
+        o marketplace `jev-claude`, as pastas da 0.6 (venv e dados) que nada usa, as chaves
+        obsoletas do config.json e, depois de trazer hook e MCPs para esta instalação, o
+        jev-claud dos outros Pythons que eles usavam.
         """
         failed = False
+        previous = self._referenced_pythons()
         for rule, title in (
             (self.claude_md, "Regra global do Claude"),
             (self._codex_rule_path(), "Regra do Codex"),
@@ -1145,8 +1299,11 @@ class Setup:
             if _listed(marketplaces, OLD_MARKETPLACE):
                 self.sys.run([path, "plugin", "marketplace", "remove", OLD_MARKETPLACE])
                 self.ui.status("ok", "Marketplace antigo", f"{OLD_MARKETPLACE} removido")
+        self._repoint_configs(path)
+        self._remove_unused_installs(previous)
         for folder in self._clean_legacy_files():
             self.ui.status("ok", "Arquivos da 0.6 (jev-claude)", f"apagado: {folder}")
+        self._prune_config()
         return 1 if failed else 0
 
     def _write_rule_to(self, path: Path) -> bool:
@@ -1194,7 +1351,7 @@ class Setup:
         if not isinstance(entry, dict):
             return False, "o Cursor ainda não usa as ferramentas do jev-claud"
         if entry.get("command") != self.sys.python or entry.get("args") != list(MCP_ARGS):
-            return False, "aponta para outra instalação do jev-claud"
+            return False, ELSEWHERE
         return True, "ferramentas decide, classify, rank, summarize_file, write"
 
     def _install_cursor_mcp(self) -> bool:
@@ -1224,7 +1381,7 @@ class Setup:
         if span is None:
             return False, "o Codex ainda não usa as ferramentas do jev-claud"
         if text[span[0] : span[1]].strip() != self._codex_block().strip():
-            return False, "aponta para outra instalação do jev-claud"
+            return False, ELSEWHERE
         return True, "ferramentas decide, classify, rank, summarize_file, write"
 
     def _install_codex_mcp(self) -> bool:

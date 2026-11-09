@@ -18,12 +18,14 @@ from jev_claud.config import config_path, load_config, save_config
 from jev_claud.wizard import (
     CLAUDE_RULE,
     DEV_PACKAGE_SPEC,
+    ELSEWHERE,
     PACKAGE_SPEC,
     RULE_END,
     RULE_START,
     UI,
     Setup,
     System,
+    _same_path,
 )
 
 # Hook que o setup grava no settings.json (o FakeSystem usa "python" como Python).
@@ -71,6 +73,10 @@ class FakeSystem(System):
             # Instalações por projeto (pastas), listadas só no `plugin list --json`.
             "plugin_projects": [],
             "project_version": None,
+            "mcp_command": "python",  # Python que o registro `jev-claud` do Claude Code chama
+            # Outros Pythons com o jev-claud: caminho -> saída do `pip show` (editável ou não).
+            "pythons": {},
+            "on_path": None,  # o `jev-claud` que o PATH acha primeiro
         }
         self.tools = set(tools)
         self.commands: list[list[str]] = []
@@ -80,6 +86,8 @@ class FakeSystem(System):
     def which(self, name: str) -> str | None:
         if name == "claude":
             return f"/bin/{name}" if self.state[name] else None
+        if name == "jev-claud":
+            return self.state["on_path"]
         return f"/usr/bin/{name}" if name in self.tools else None
 
     def run(self, command: Sequence[str], cwd: Path | None = None) -> int:
@@ -101,6 +109,9 @@ class FakeSystem(System):
                 self.state["project_version"] = self.state["marketplace_version"]
             else:
                 self.state["plugin_version"] = self.state["marketplace_version"]
+        elif command[1:3] == ["plugin", "uninstall"] and "project" in command:
+            self.state["plugin_projects"].remove(str(cwd))
+            self.state["plugin_scopes"].remove("project")
         elif command[1:3] == ["plugin", "uninstall"]:
             names = {
                 "jev-claude@jev-claude": "old_plugin",
@@ -110,6 +121,9 @@ class FakeSystem(System):
             self.state[names[command[3]]] = False
         elif command[1:3] == ["mcp", "add"]:
             self.state["mcp"] = True
+            self.state["mcp_command"] = command[command.index("--") + 1]
+        elif command[1:5] == ["-m", "pip", "uninstall", "-y"]:
+            del self.state["pythons"][self._python_key(command[0])]
         elif command[1:3] == ["mcp", "remove"]:
             self.state["mcp" if command[-1] == "jev-claud" else "old_mcp"] = False
         elif "typesafe-sdk" in command:
@@ -174,10 +188,18 @@ class FakeSystem(System):
             return 0, "\n".join(names) + "\n"
         if list(command[1:3]) == ["mcp", "get"]:
             key = {"jev-claud": "mcp", "plugin:jevin:jev-claud": "plugin_mcp"}.get(command[3], "old_mcp")
-            return (
-                (0, f"{command[3]}:\n  Status: ✔ Connected\n") if self.state[key] else (1, "No MCP server\n")
-            )
+            if not self.state[key]:
+                return 1, "No MCP server\n"
+            shown = f"  Command: {self.state['mcp_command']}\n" if key == "mcp" else ""
+            return 0, f"{command[3]}:\n  Status: ✔ Connected\n{shown}"
+        if list(command[1:4]) == ["-m", "pip", "show"]:
+            info = self.state["pythons"].get(self._python_key(command[0]))
+            return (0, info) if info is not None else (1, "WARNING: Package(s) not found: jev-claud\n")
         return 1, ""
+
+    def _python_key(self, python: str) -> str:
+        r"""O mesmo Python, escrito com `/` (no hook) ou `\` (no PATH)."""
+        return next((key for key in self.state["pythons"] if _same_path(key, python)), python)
 
     def spawn(self, command: Sequence[str]) -> None:
         self.spawned.append(list(command))
@@ -754,10 +776,149 @@ def test_project_installs_are_updated_in_their_own_folders(tmp_path: Path) -> No
     )
     ui, out = make_ui()
     assert Setup(system=system, ui=ui, version="0.10.1").refresh() == 0
-    project = ["/bin/claude", "plugin", "update", "-s", "project", "jevin@jev-claud"]
-    assert system.cwds == [(project, app)]  # a pasta que não existe mais fica de fora
+    update = ["/bin/claude", "plugin", "update", "-s", "project", "jevin@jev-claud"]
+    uninstall = ["/bin/claude", "plugin", "uninstall", "-s", "project", "jevin@jev-claud"]
+    # A pasta apagada é recriada só para o Claude Code tirar o registro, e some de novo.
+    assert system.cwds == [(uninstall, gone), (update, app)]
+    assert not gone.exists() and system.state["plugin_projects"] == [str(app)]
     assert system.state["project_version"] == "0.10.1"
-    assert "projetos que não achei" in out.getvalue()
+    assert f"registro removido: {gone}" in out.getvalue()
+    assert "projetos que não achei" not in out.getvalue()
+
+
+def test_deleted_project_keeps_folders_that_already_existed(tmp_path: Path) -> None:
+    """Só as pastas recriadas para a desinstalação são apagadas; as que já existiam ficam."""
+    system = FakeSystem(tmp_path, "linux", claude=True)
+    parent = tmp_path / "projetos"
+    parent.mkdir()
+    gone = parent / "velho" / "app"
+    system.state.update(
+        plugin=True,
+        plugin_version="0.10.0",
+        plugin_scopes=["user", "project"],
+        plugin_projects=[str(gone)],
+        marketplace_version="0.10.1",
+    )
+    ui, _ = make_ui()
+    assert Setup(system=system, ui=ui, version="0.10.1")._drop_missing_projects("/bin/claude") == 1
+    assert parent.exists() and not (parent / "velho").exists()
+
+
+def _other_python(tmp_path: Path, system: FakeSystem, *, editable: bool = False) -> str:
+    """Um segundo Python com o jev-claud, que o hook ainda usa (como o global ao lado do venv)."""
+    other = tmp_path / "global" / "python.exe"
+    other.parent.mkdir(parents=True)
+    other.write_text("", encoding="utf-8")
+    info = "Name: jev-claud\nVersion: 0.10.2\n"
+    if editable:
+        info += "Editable project location: D:\\clone\n"
+    system.state["pythons"][str(other)] = info
+    settings = system.home / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    hook = {**HOOK, "command": f"{other.as_posix()} -m jev_claud hook pre-bash"}
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [{"hooks": [hook]}]}}), encoding="utf-8")
+    return other.as_posix()  # como o hook grava
+
+
+def _shim_to(system: FakeSystem, python: str) -> None:
+    shim = system.home / ".local" / "bin" / "jev-claud.cmd"
+    shim.parent.mkdir(parents=True, exist_ok=True)
+    shim.write_text(f'@echo off\r\n"{python}" -m jev_claud %*\r\n', encoding="utf-8")
+
+
+def test_refresh_moves_the_hook_here_and_removes_the_old_copy(tmp_path: Path) -> None:
+    """O update roda nesta instalação: o hook passa a usá-la e a cópia antiga sai do outro Python."""
+    system = FakeSystem(tmp_path, claude=True)
+    other = _other_python(tmp_path, system)
+    _shim_to(system, system.python)
+    ui, out = make_ui()
+    setup = Setup(system=system, ui=ui, version="1.0.0")
+    assert setup._check_hook() == (False, ELSEWHERE)
+    assert setup.refresh() == 0
+    assert setup._check_hook()[0] is True
+    assert [other, "-m", "pip", "uninstall", "-y", "-q", "jev-claud"] in system.commands
+    assert system.state["pythons"] == {}
+    assert f"removida de {other}" in out.getvalue()
+
+
+def test_refresh_keeps_an_editable_copy_and_one_still_in_use(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, claude=True)
+    other = _other_python(tmp_path, system, editable=True)  # o clone de alguém: fica
+    _shim_to(system, system.python)
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    assert len(system.state["pythons"]) == 1
+
+    system = FakeSystem(tmp_path / "b", claude=True)
+    other = _other_python(tmp_path / "b", system)
+    _shim_to(system, other)  # o atalho `jev-claud` ainda chama o outro Python: fica
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    assert len(system.state["pythons"]) == 1
+    assert not any("uninstall" in command for command in system.commands)
+
+
+def test_refresh_only_suggests_removal_when_the_command_would_disappear(tmp_path: Path) -> None:
+    """Sem atalho desta instalação, tirar a outra apagaria o comando `jev-claud`: só avisa."""
+    system = FakeSystem(tmp_path, claude=True)
+    other = _other_python(tmp_path, system)
+    ui, out = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    assert len(system.state["pythons"]) == 1
+    assert f"`{other} -m pip uninstall jev-claud`" in out.getvalue()
+
+
+def test_copy_found_only_on_the_path_is_removed(tmp_path: Path) -> None:
+    """O `jev-claud` do PATH vinha do Scripts de outro Python, que nada mais usava."""
+    system = FakeSystem(tmp_path, claude=True)
+    other = tmp_path / "Python312" / "python.exe"
+    (other.parent / "Scripts").mkdir(parents=True)
+    other.write_text("", encoding="utf-8")
+    system.state["pythons"][str(other)] = "Name: jev-claud\nVersion: 0.10.2\n"
+    system.state["on_path"] = str(other.parent / "Scripts" / "jev-claud.exe")
+    _shim_to(system, system.python)
+    ui, _ = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    assert str(other) not in system.state["pythons"]
+
+
+def test_refresh_moves_the_claude_code_mcp_registration_here(tmp_path: Path) -> None:
+    system = FakeSystem(tmp_path, claude=True, mcp=True)
+    system.state["mcp_command"] = "/velho/python"
+    ui, out = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    commands = [" ".join(c) for c in system.commands]
+    assert "/bin/claude mcp remove -s user jev-claud" in commands
+    assert "/bin/claude mcp add -s user jev-claud -- python -m jev_claud mcp" in commands
+    assert system.state["mcp_command"] == "python" and "agora usa esta instalação" in out.getvalue()
+
+
+def test_refresh_drops_config_keys_that_left_use(tmp_path: Path) -> None:
+    from jev_claud.config import config_path
+
+    system = FakeSystem(tmp_path, "linux")
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"budget_usd": 1.0, "ollama_model": "llama3.2"}), encoding="utf-8")
+    ui, out = make_ui()
+    Setup(system=system, ui=ui, version="1.0.0").refresh()
+    assert json.loads(path.read_text(encoding="utf-8")) == {"budget_usd": 1.0}
+    assert "chaves que saíram de uso: ollama_model" in out.getvalue()
+
+
+def test_python_beside_a_jev_claud_command(tmp_path: Path) -> None:
+    from jev_claud.wizard import _python_beside
+
+    venv, system_python = tmp_path / "venv" / "Scripts", tmp_path / "Python312"
+    (system_python / "Scripts").mkdir(parents=True)
+    venv.mkdir(parents=True)
+    (venv / "python.exe").write_text("", encoding="utf-8")
+    (system_python / "python.exe").write_text("", encoding="utf-8")
+    assert _python_beside(str(venv / "jev-claud.exe")) == str(venv / "python.exe")
+    assert _python_beside(str(system_python / "Scripts" / "jev-claud.exe")) == str(
+        system_python / "python.exe"
+    )
+    assert _python_beside(str(tmp_path / "bin" / "jev-claud")) is None
 
 
 def test_refresh_updates_only_what_is_installed(tmp_path: Path) -> None:
