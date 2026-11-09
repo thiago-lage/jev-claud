@@ -5,18 +5,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
-### Adicionado
-
-- **O `jev-claud update` limpa sozinho o que a versão anterior deixou**, em qualquer máquina:
-  - tira o Jevin dos projetos cuja pasta foi apagada (antes, o registro ficava e o update
-    terminava com "projetos que não achei");
-  - leva o hook e os MCPs do Claude Code, do Cursor e do Codex para a instalação que acabou de
-    ser atualizada, quando apontavam para outra;
-  - desinstala o jev-claud do outro Python que eles usavam, se nada mais o usa (hook, MCP ou
-    atalho). Fica a instalação editável e, sem o atalho `jev-claud` desta instalação, o update
-    só mostra o comando, para não sumir com o `jev-claud`;
-  - tira do `config.json` as chaves que saíram de uso.
-
 ## [1.0.0] - 2026-11-09
 
 O jev-claud passa a operar **só dentro do LLM da sessão** em que está instalado: sem backend de
@@ -40,6 +28,15 @@ essencial do setup, que não trava mais o terminal nem a skill.
 
 ### Adicionado
 
+- **O `jev-claud update` limpa sozinho o que a versão anterior deixou**, em qualquer máquina:
+  - tira o Jevin dos projetos cuja pasta foi apagada (antes, o registro ficava e o update
+    terminava com "projetos que não achei");
+  - leva o hook e os MCPs do Claude Code, do Cursor e do Codex para a instalação que acabou de
+    ser atualizada, quando apontavam para outra;
+  - desinstala o jev-claud do outro Python que eles usavam, se nada mais o usa (hook, MCP ou
+    atalho). Fica a instalação editável e, sem o atalho `jev-claud` desta instalação, o update
+    só mostra o comando, para não sumir com o `jev-claud`;
+  - tira do `config.json` as chaves que saíram de uso.
 - **MCP sampling.** Quando o host declara `sampling` no `initialize`, o servidor pede o texto
   ao LLM da sessão com `sampling/createMessage` (`SamplingWriter`): `write` e `summarize_file`
   voltam prontos, os itens incertos de `classify` e as perguntas incertas de `decide` são
