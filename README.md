@@ -249,7 +249,7 @@ terminal: mostra o que falta, explica para que serve e **pergunta antes de insta
 | Skill TypeSafe | `claude plugin install typesafe@typesafe-ai`. |
 | Servidor MCP | Registra o `jev-claud` no Claude Code para delegar lotes e economizar tokens. Se o plugin Jevin já traz o servidor, não registra outro e remove o repetido. |
 | Saídas compactadas | Grava no `~/.claude/settings.json` o hook que compacta as saídas longas de testes e builds (detalhes abaixo). |
-| Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): skill e subagente explorador. |
+| Plugin | Instala o plugin **Jevin** (`jevin@jev-claud`): skill, subagente explorador e o servidor MCP. |
 | Regra global | Ensina o Claude, no `~/.claude/CLAUDE.md`, quando usar Jev e quando usar LLM. |
 | Cursor e Codex | Só se estiverem instalados: as mesmas ferramentas MCP e, no Codex, a mesma regra ([comparativo](#claude-code-cursor-e-codex-o-que-funciona-em-cada-um)). |
 
@@ -279,7 +279,9 @@ Exemplo completo, que roda sem configurar nada: [`examples/triagem_suporte.py`](
 
 ## Dentro do Claude: servidor MCP para economizar tokens
 
-O `jev-claud setup` registra o jev-claud como servidor MCP do Claude Code (ou faça à mão):
+O plugin Jevin traz o servidor MCP do jev-claud (`plugin:jevin:jev-claud`, que roda o comando
+`jev-claud mcp` do pacote instalado). Sem o plugin, ou se o servidor dele não conectar, o
+`jev-claud setup` registra o servidor direto no Claude Code (ou faça à mão):
 
 ```bash
 claude mcp add -s user jev-claud -- python -m jev_claud mcp
@@ -338,9 +340,8 @@ Use o `fingerprint` retornado para detectar alterações entre diagnóstico e co
 - A API Python continua retornando objetos `Decision` com seus candidatos e faixas de
   confiança. Quem a consome deve tratar `uncertain` e definir o caminho de abstenção.
 
-Esta entrega acrescenta diagnóstico e evidências. Monitor contínuo no terminal,
-processamento incremental, cancelamento de inferência e adaptador específico para
-Antigravity ainda não estão implementados. Ter MCP configurado não comprova que um agente
+Monitor contínuo no terminal, processamento incremental, cancelamento de inferência e
+adaptador específico para Antigravity ainda não estão implementados. Ter MCP configurado não comprova que um agente
 está conectado; a atividade mostrada em `status` pertence somente ao servidor consultado.
 
 **Onde a economia é real:** tudo que o Claude lê ou escreve custa tokens. Se você pede
@@ -381,13 +382,14 @@ Transparência total sobre o que acontece na sua máquina:
 - **Roda:** o hook chama `python -m jev_claud hook pre-bash` só quando o Claude Code vai rodar
   um comando no Bash. Se for um teste/build/lint simples, o comando é reescrito para
   `python -m jev_claud run -- <o mesmo comando>`, que o executa, compacta a saída e devolve o
-  mesmo código de saída. Nenhum outro comando é alterado. O plugin Jevin não roda nada: tem só
-  texto (a skill e o subagente).
+  mesmo código de saída. Nenhum outro comando é alterado. O plugin Jevin não traz código: a
+  skill e o subagente são texto, e o servidor MCP que ele inicia é o comando `jev-claud mcp` do
+  pacote instalado.
 - **Grava (só localmente, na pasta de dados do jev-claud):** a saída completa de cada comando
   compactado (`logs/`, as 20 mais recentes) e contadores de economia por mês num SQLite. Nada sai
   da sua máquina.
-- **Envia:** o hook e o plugin não acessam a rede. A biblioteca `jev-claud` só envia texto para
-  a API da TypeSafe (Jev) se você configurar uma chave e um orçamento. O texto fica com o LLM da
+- **Envia:** o hook não acessa a rede. A biblioteca e o servidor MCP só enviam texto para a API
+  da TypeSafe (Jev) se você configurar uma chave e um orçamento. O texto fica com o LLM da
   sessão (pelo host do MCP) ou com o `Writer` que o seu código passar.
 - **Não faz:** não lê credenciais, não altera permissões do Claude Code (o comando reescrito
   passa pelas mesmas perguntas de permissão) e não coleta telemetria.
@@ -428,6 +430,7 @@ atalho).
 | --- | --- | --- |
 | Skill `jev` | Ensina quando usar Jev, LLM ou código puro, quando as ferramentas MCP compensam e como ler as saídas compactadas. Só entra no contexto quando é relevante | — |
 | Subagente `scout` | Explora o código em contexto separado (modelo menor) e devolve só a conclusão com `caminho:linha` | barato |
+| Servidor MCP `jev-claud` | Roda o `jev-claud mcp` do pacote instalado e dá ao Claude as [ferramentas](#dentro-do-claude-servidor-mcp-para-economizar-tokens) `classify`, `rank`, `summarize_file`... Sem o pacote, aparece como falho e o resto funciona | — |
 
 Funciona no Claude Code e no Cowork; nas conversas do claude.ai, só a skill. Até a 0.7 o hook de
 compactação vinha no plugin; desde a 0.8 ele é instalado pelo `jev-claud setup` (rode-o de novo
@@ -437,7 +440,7 @@ depois de atualizar).
 
 | Recurso | Claude Code | Cursor | Codex |
 | --- | --- | --- | --- |
-| Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | Automático pelo setup | Automático pelo setup; ligue em *Settings › Tools & MCP* | Automático pelo setup |
+| Ferramentas MCP (`classify`, `rank`, `summarize_file`, `decide`, `write`) | Pelo plugin Jevin (ou pelo setup, sem o plugin) | Automático pelo setup; ligue em *Settings › Tools & MCP* | Automático pelo setup |
 | Regra "Jev ramifica, LLM escreve" | Automático (`~/.claude/CLAUDE.md`) | Manual: `jev-claud rule` e cole em *Settings › Rules* | Automático (`AGENTS.md`) |
 | [Saídas de teste compactadas](#saídas-de-teste-compactadas) | Automático no Bash e no PowerShell (hook que não aprova nada sozinho) | Em desenvolvimento | Em desenvolvimento |
 | [Plugin Jevin](#plugin-do-claude-code-jevin) (skill `jev` e subagente `scout`) | Sim: marketplace do projeto | Não | Não |
