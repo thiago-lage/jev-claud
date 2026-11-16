@@ -21,21 +21,21 @@ oficial é só a que sai deste repositório, `thiago-lage/jev-claud`, e do proje
 - **O wheel anexado ao release tem atestado de build.** Com o GitHub CLI:
 
   ```bash
-  gh release verify v1.0.0 --repo thiago-lage/jev-claud
-  gh attestation verify jev_claud-1.0.0-py3-none-any.whl --repo thiago-lage/jev-claud
+  gh release verify v1.0.1 --repo thiago-lage/jev-claud
+  gh attestation verify jev_claud-1.0.1-py3-none-any.whl --repo thiago-lage/jev-claud
   ```
 
-  (O atestado do wheel vale a partir da primeira versão lançada depois da 1.0.0.)
+  (Releases até a 1.0.0 saíram antes dessas proteções: não têm atestado nem são imutáveis.)
 - **Instalador numa versão fixa.** O instalador de uma linha usa o `install.sh`/`install.ps1` da
   `main` e instala a versão mais nova do PyPI. Para fixar os dois, use a tag da versão:
 
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.0/install.sh \
-    | JEV_CLAUD_SPEC="jev-claud[jev]==1.0.0" bash
+  curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.1/install.sh \
+    | JEV_CLAUD_SPEC="jev-claud[jev]==1.0.1" bash
   ```
 
-  No Windows: `$env:JEV_CLAUD_SPEC = "jev-claud[jev]==1.0.0"` e depois
-  `irm https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.0/install.ps1 | iex`.
+  No Windows: `$env:JEV_CLAUD_SPEC = "jev-claud[jev]==1.0.1"` e depois
+  `irm https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.1/install.ps1 | iex`.
 - **Desconfie de pacotes com nomes parecidos** (`jev-claude`, `jevclaud`...) no PyPI ou de
   cópias no GitHub: o pacote oficial é só `jev-claud`. (O comando `jev-claude` que o instalador
   cria é só um atalho antigo para o mesmo programa.)

@@ -5,6 +5,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+## [1.0.1] - 2026-11-16
+
+Versão de segurança: nada muda no uso. A cadeia de publicação fica verificável e o
+repositório, protegido contra alterações indevidas.
+
 ### Segurança
 
 - **Cadeia de publicação endurecida.** As actions dos workflows ficam fixadas por SHA e o
