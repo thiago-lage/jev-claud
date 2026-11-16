@@ -6,6 +6,40 @@ Não abra uma issue pública. Use o recurso **Security > Report a vulnerability*
 (aviso privado) com uma descrição e, se possível, um exemplo mínimo. A resposta inicial sai
 em até 7 dias.
 
+## Como conferir que você tem a versão oficial
+
+Qualquer pessoa pode fazer um fork e modificar a cópia dela (a licença MIT permite). A versão
+oficial é só a que sai deste repositório, `thiago-lage/jev-claud`, e do projeto
+[`jev-claud` no PyPI](https://pypi.org/project/jev-claud/).
+
+- **Só o dono altera o repositório oficial.** A `main` não aceita force-push nem exclusão; as tags
+  `v*` não podem ser movidas nem apagadas; e os releases são imutáveis: depois de publicados,
+  tag e arquivos não mudam mais.
+- **O pacote no PyPI é publicado pelo workflow `release.yml`**, por trusted publishing (sem token
+  guardado) e com atestado de proveniência. A página do pacote no PyPI mostra o repositório e o
+  workflow de origem em *Verified details*.
+- **O wheel anexado ao release tem atestado de build.** Com o GitHub CLI:
+
+  ```bash
+  gh release verify v1.0.0 --repo thiago-lage/jev-claud
+  gh attestation verify jev_claud-1.0.0-py3-none-any.whl --repo thiago-lage/jev-claud
+  ```
+
+  (O atestado do wheel vale a partir da primeira versão lançada depois da 1.0.0.)
+- **Instalador numa versão fixa.** O instalador de uma linha usa o `install.sh`/`install.ps1` da
+  `main` e instala a versão mais nova do PyPI. Para fixar os dois, use a tag da versão:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.0/install.sh \
+    | JEV_CLAUD_SPEC="jev-claud[jev]==1.0.0" bash
+  ```
+
+  No Windows: `$env:JEV_CLAUD_SPEC = "jev-claud[jev]==1.0.0"` e depois
+  `irm https://raw.githubusercontent.com/thiago-lage/jev-claud/v1.0.0/install.ps1 | iex`.
+- **Desconfie de pacotes com nomes parecidos** (`jev-claude`, `jevclaud`...) no PyPI ou de
+  cópias no GitHub: o pacote oficial é só `jev-claud`. (O comando `jev-claude` que o instalador
+  cria é só um atalho antigo para o mesmo programa.)
+
 ## Boas práticas ao usar o jev-claud
 
 - **Chaves ficam no servidor.** `TYPESAFE_API_KEY` e a chave de um `Writer` que você passar à

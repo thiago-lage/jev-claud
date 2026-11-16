@@ -48,6 +48,10 @@ irm https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.ps1 | i
 curl -fsSL https://raw.githubusercontent.com/thiago-lage/jev-claud/main/install.sh | bash
 ```
 
+A versão oficial sai só deste repositório e do pacote `jev-claud` no PyPI, com atestado de
+proveniência. Para conferir o que baixou ou instalar numa versão fixa, veja
+[Como conferir que você tem a versão oficial](SECURITY.md#como-conferir-que-você-tem-a-versão-oficial).
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/setup.png" alt="jev-claud setup: o mascote, a economia do mês e a verificação de cada peça, perguntando antes de instalar" width="720">
 </p>

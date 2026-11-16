@@ -3,7 +3,17 @@ name: Release
 # Duas formas de lançar uma versão:
 #   1. Actions -> Release -> "Run workflow", informando a versão (ex.: 0.5.0). O workflow cria a
 #      tag vX.Y.Z e o release com as notas do CHANGELOG.md, anexa o wheel e publica no PyPI.
-#   2. Criar o release pela interface do GitHub (tag vX.Y.Z): o workflow publica no PyPI.
+#      Este é o caminho recomendado.
+#   2. Criar o release pela interface do GitHub (tag vX.Y.Z): o workflow publica no PyPI, mas
+#      não anexa o wheel (o release já nasce publicado e os releases do repositório são imutáveis).
+#
+# Releases imutáveis: depois de publicado, nem a tag nem os arquivos do release mudam. Por isso o
+# workflow cria o release como rascunho, anexa o wheel e o sdist e só então publica. O GitHub
+# gera um atestado do release (`gh release verify vX.Y.Z`), e o wheel ganha um atestado de
+# proveniência do build (`gh attestation verify <arquivo> --repo thiago-lage/jev-claud`).
+#
+# Publicar no PyPI passa pelo ambiente `pypi`, que só aceita a main e tags v* e pede aprovação
+# do dono antes de rodar.
 #
 # Versão antiga (ex.: 0.3.1): informe `target` com o commit e desmarque `publish`; só o release
 # no GitHub é criado.
@@ -68,11 +78,16 @@ jobs:
     needs: plan
     if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # assina o atestado de proveniência (Sigstore)
+      attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.plan.outputs.target }}
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Confere a versão
@@ -93,7 +108,12 @@ jobs:
           /tmp/wheel-test/bin/pip install dist/*.whl
           /tmp/wheel-test/bin/jev-claud --version
           /tmp/wheel-test/bin/python -c "from jev_claud import JevClaud, Image, box; print('ok')"
-      - uses: actions/upload-artifact@v4
+      # Atestado de proveniência: liga o wheel e o sdist a este workflow e a este commit.
+      # Quem baixa confere com `gh attestation verify <arquivo> --repo thiago-lage/jev-claud`.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
@@ -112,8 +132,12 @@ jobs:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       VERSION: ${{ needs.plan.outputs.version }}
       TARGET: ${{ needs.plan.outputs.target }}
+      PUBLISH: ${{ needs.plan.outputs.publish }}
     steps:
-      - uses: actions/checkout@v7  # o CHANGELOG mais novo, mesmo para versões antigas
+      # O CHANGELOG mais novo, mesmo para versões antigas.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Notas do CHANGELOG
         run: |
           python3 - <<'PY'
@@ -125,29 +149,40 @@ jobs:
               raise SystemExit(f"::error::Seção [{version}] não encontrada no CHANGELOG.md")
           pathlib.Path("notes.md").write_text(match.group(1).strip() + "\n", encoding="utf-8")
           PY
-      - name: Cria a tag e o release
+      # Releases imutáveis: o release nasce rascunho (sem tag ainda), recebe os arquivos e só
+      # então é publicado; a publicação cria a tag e trava tag e arquivos.
+      - name: Cria o release como rascunho
         if: needs.plan.outputs.create == 'true'
         run: |
-          latest=$([ "${{ needs.plan.outputs.publish }}" = "true" ] && echo true || echo false)
           # A mensagem do gh vira anotação: fica visível no resumo da execução e pela API.
           if ! out=$(gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$TARGET" \
-            --title "v$VERSION" --notes-file notes.md --latest="$latest" 2>&1); then
+            --title "v$VERSION" --notes-file notes.md --draft 2>&1); then
             echo "::error title=gh release create::${out//$'\n'/%0A}"
             exit 1
           fi
           echo "$out"
-      - uses: actions/download-artifact@v4
-        if: needs.build.result == 'success'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.plan.outputs.create == 'true' && needs.build.result == 'success'
         with:
           name: dist
           path: dist/
       - name: Anexa o wheel e o sdist
-        if: needs.build.result == 'success'
+        if: needs.plan.outputs.create == 'true' && needs.build.result == 'success'
         run: |
           if ! out=$(gh release upload "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --clobber 2>&1); then
             echo "::error title=gh release upload::${out//$'\n'/%0A}"
             exit 1
           fi
+      - name: Publica o release
+        if: needs.plan.outputs.create == 'true'
+        run: |
+          latest=$([ "$PUBLISH" = "true" ] && echo true || echo false)
+          if ! out=$(gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false \
+            --latest="$latest" 2>&1); then
+            echo "::error title=gh release edit::${out//$'\n'/%0A}"
+            exit 1
+          fi
+          echo "$out"
 
   pypi:
     needs: [plan, build, github]
@@ -159,8 +194,8 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

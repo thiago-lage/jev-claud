@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+### Segurança
+
+- **Cadeia de publicação endurecida.** As actions dos workflows ficam fixadas por SHA e o
+  checkout não guarda mais credenciais. O release nasce como rascunho, recebe o wheel e o sdist
+  e só então é publicado, para funcionar com releases imutáveis. O wheel e o sdist ganham
+  atestado de proveniência (`gh attestation verify`).
+- **Proteções no repositório:** a `main` sem force-push nem exclusão, tags `v*` imutáveis,
+  releases imutáveis e o ambiente `pypi` restrito à `main` e às tags, com aprovação do dono.
+- **SECURITY.md** explica como conferir que o pacote é o oficial e como instalar numa versão fixa.
+
 ## [1.0.0] - 2026-11-09
 
 O jev-claud passa a operar **só dentro do LLM da sessão** em que está instalado: sem backend de
