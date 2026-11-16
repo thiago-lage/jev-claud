@@ -1,0 +1,36 @@
+# Itens protegidos do jev-claud: um caminho por linha, relativo à raiz do repositório.
+#
+# tests/test_protecao.py falha no CI se algum deles sumir, e
+# `python tools/restaurar_protegidos.py --aplicar` traz de volta a partir do histórico do git.
+# Tirar um item daqui exige pedido explícito do dono (veja AGENTS.md, seção 2).
+
+# Termos e políticas
+LICENSE
+SECURITY.md
+PRIVACY.md
+CONTRIBUTING.md
+AGENTS.md
+
+# Normas e bloqueios para agentes de IA
+.claude/CLAUDE.md
+.claude/settings.json
+
+# Cadeia de publicação
+.github/CODEOWNERS
+.github/dependabot.yml
+.github/protected-files.txt
+.github/workflows/ci.yml
+.github/workflows/release.yml
+pyproject.toml
+
+# O que o usuário baixa e executa
+install.sh
+install.ps1
+.claude-plugin/marketplace.json
+plugin/LICENSE
+plugin/.claude-plugin/plugin.json
+plugin/skills/jev/SKILL.md
+
+# O próprio guarda
+tests/test_protecao.py
+tools/restaurar_protegidos.py

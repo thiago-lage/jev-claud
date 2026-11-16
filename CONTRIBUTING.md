@@ -9,6 +9,13 @@ Obrigado por ajudar! O projeto segue três princípios:
 3. **Núcleo sem dependências.** O modo offline, o cache e a escrita via LLM usam só a stdlib.
    O `typesafe-sdk` é opcional (`jev-claud[jev]`).
 
+## Itens protegidos e agentes de IA
+
+Os arquivos listados em `.github/protected-files.txt` (licença, políticas, workflows,
+instaladores, plugin) não podem sumir: o teste `tests/test_protecao.py` falha no CI se algum
+for apagado, e `python tools/restaurar_protegidos.py --aplicar` recupera pelo histórico do git.
+Agentes de IA seguem as normas de [`AGENTS.md`](AGENTS.md).
+
 ## Ambiente
 
 ```bash
