@@ -5,6 +5,11 @@
 
 **Prepara evidências e reduz ruído para o agente principal. Custo zero por padrão.**
 
+> **Versão atual: [1.0.1](https://github.com/thiago-lage/jev-claud/releases/tag/v1.0.1)**, uma
+> versão de segurança que não muda nada no uso. O pacote sai com atestado de proveniência, o
+> release é imutável e o repositório fica protegido contra alterações indevidas. Detalhes no
+> [CHANGELOG](CHANGELOG.md#101---2026-11-16).
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/thiago-lage/jev-claud/main/docs/terminal.png" alt="Terminal do jev-claud: o mascote em pixel art, os comandos principais e a economia de tokens do mês" width="720">
 </p>
